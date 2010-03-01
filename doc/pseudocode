@@ -1,0 +1,275 @@
+# vim:syntax=java
+    /* The HTTPClient API does not give access to the connection itself, so we need to do the 
+     * client-side code in two steps:
+     *  - Get the identifier of a host
+     *  - Ask HTTPClient to query it
+     *     HTTPClient will call our acquireConnection() callback
+     * 
+     * If an error occurs, HTTPClient rethrows it, so in that case, we call hostFailure before
+     * releasing the connection to HTTPClient. HTTPClient will then call our releaseConnection() callback
+     */
+
+    /**
+     * TODO
+     *  - maxTotalConnections / maxConnectionsPerHost
+     *  - maxIdleConnectionsPerHost
+     *  - maxConnectionIdleTime. But beware ! If we always take the oldest connection, this can't work.
+     *    We need something smarter, like "keep a floating average of actually used connections and remove 
+     *    the N oldest".
+     */
+
+    class MonitoredConnection {
+	HttpConnection conn;
+	long lastCheked;
+	long lastUsed;
+    }
+
+    class HostState {
+	boolean down;
+	HostConfiguration config;
+	// Pooled connections for this host 
+        List<MonitoredConnection> idleConnections;
+	int inFlightConnections;
+    }
+
+    List<HostState> hosts;
+    int nextHost;
+    int curHostAlreadyUsed;
+
+
+    Host getHostToUse() {
+	LOCK
+        return hosts.filter(alive=true).roundRobin();
+	UNLOCK
+    }
+
+    Connection acquire(HostConfiguration config) {
+	Host host = getHostFromConfig(config);
+        while (true) {
+            boolean needSynchronousCheck = false;
+            Connection c;
+            LOCK
+            {
+                if (host.down) {
+                    throw Exception("host is down");
+                }
+
+                Connection[] recentlyChecked = host.connections.filter(lastChecked < 1000ms);
+                if (recentlyChecked.length == 0) {
+                    needSynchronousCheck = true;
+                    c = host.connections.get(oldest);
+                } else if (host.connections.length > 0) {
+                    c = recentlyChecked.get(oldest);
+                }
+            }
+            UNLOCK
+
+            /* There was no connection active for the host, so connect now */
+            if (c == null) {
+                needSynchronousCheck = false;
+                c = connect(connectTimeout)
+                if (failed || timeout) {
+                    LOCK
+                    {
+                        host.down = true;
+                        // If the host has connections, it means that they were 
+                        // established while we were trying to connect. .. So maybe the host
+                        // is not down, but to be sure, let's still consider as down and 
+                        // kill everything
+                        killAllHostConnections(host);
+                        throw Exception("host is down");
+                    } 
+                    UNLOCK
+                }
+            }
+
+            /* The connection we got was too old, perform a quick check */
+            if (needSynchronousCheck) {
+                setIsAliveTimeout();
+                /* Fast check */
+                performHTTPOPTIONS(c);
+                if (ok) {
+                    break;
+                } else if (timeout) {
+                    LOCK
+                    {
+                        /* Don't waste time, server is hanged */
+                        host.down = true;
+                        killAllHostConnections(host);
+                        throw Exception("host is down");
+                    }
+                    UNLOCK
+                } else if (fail) {
+                    LOCK
+                    {
+                        /* Server looks down (connection RST ?), try to fast kill the connections */
+                        killTCPResetConnections(host);
+                        killConnection(c);
+                        /* But we still retry with other connections OR retry a reconnect.*
+                         * The loop will either run until we're out of potential victims or a connection
+                         * works
+                         */
+                        host.down = true;
+                        killAllHostConnections(host);
+                        continue;
+                    }
+                    UNLOCK
+                }
+            }
+        }
+        setApplicativeTimeout(c);
+        return c;
+    }
+
+    static local nextConnectionIsDead = { FALSE, TIMEOUT, FAILED }
+    /** The client tells us about the failure of a host */
+    void hostFailure(host, typeOfailure) {
+        nextConnectionIsDead = typeOfFailure;
+    }
+
+    void releaseConnection(Connection c) {
+	HostConfiguration config = rebuildConfigFromConn(c);
+	Host host = getHostFromConfig(config);
+
+        if (nextConnectionIsDead == FAILED) {
+            LOCK
+            {
+                /* Ok, so c is brain dead */
+                // Fast-kill the RST connections and schedule this host for immediate
+                // check by the background thread
+                killTCPResetConnections(host);
+                setNextToMonitor(host);
+            }
+            UNLOCK
+        } else if (nextConnectionIsDead == TIMEOUT) {
+            LOCK
+            {
+                /* This one is the most tricky. 
+                 * Maybe we timeouted because the query was too complex.
+                 * But maybe it was because the remote host is down.
+                 * So let's take an average path: we mark all connections for this
+                 * host as very old so that they get rechecked before any attempt
+                 * to use them.
+                 */
+                foreach (freeConnection){ lastChecked = 0; }
+            }
+            UNLOCK
+        } else {
+            connection.lastUsed = now();
+            /* It was just used successfully so mark it as checked */
+            connection.lastChecked = now();
+        }
+
+
+        /* Reset the thread-local signalling variable */
+        nextConnectionIsDead = FALSE;
+    }
+
+    /* ********* Structures for scheduling of monitoring *********** */
+
+    // TODO: improve this by providing exponential backoff when a host is hanged
+    // This will avoid slowing down the monitoring loop in that case
+    // TODO: Several priority queues ?
+
+    LinkedList<HostState> nextToMonitorList;
+    LinkedList<HostState> monitored;
+
+    // MUST BE CALLED WITH THE LOCK
+    HostState nextToMonitor() {
+	assert(nextToMonitorList.size() + monitored.size == hosts.size());
+	if (nextToMonitorList.isEmpty()) {
+		nextToMonitorList = monitored;
+	}
+	HostState hs = nextToMonitorList.front();
+	monitored.push_back(hs);
+	return hs;
+    }
+
+    // MUST BE CALLED WITH THE LOCK
+    void setNextToMonitor(HostState hs) {
+	/* Remove HS from its current position in nextToMonitor or monitored */
+	TODO
+	nextToMonitor.push_front(hs);
+    }
+
+    class MonitoringThread extends Thread {
+        public void run() {
+            while (!stop) {
+                monitorLoop();
+            }
+        }
+        
+        public void monitorLoop() {
+            LOCK
+            {
+                HostState hs = nextToMonitor();
+
+                Connection c;
+                if (freeConnections[host] != 0) {
+                    c = removeOldestConnectionFromFree();
+                }
+            }
+            UNLOCK
+
+            /* No current connection for this host, need to connect */
+            if (c == null) {
+                try {
+                    c = connect(isAliveTimeout);
+                } onfail {
+                    LOCK
+                    host.down = true;
+                    killAllConnections() // See comment about concurrent connect in acquire()
+                    UNLOCK
+                    goto sleep;
+                } ontimeout {
+                    LOCK
+                    host.down = true;
+                    killAllConnections() // See comment about concurrent connect in acquire()
+                    UNLOCK
+                    goto sleep;
+                }
+            }
+
+            setIsAliveTimeout();
+            validateServerUsingConnection(c);
+
+            LOCK
+            {
+                if (explicitFailure) {
+                    /* Explicit error: connection reset ?
+                     * There is only a low probability that just this connection is 
+                     * in bad state, the host is probably down.
+                     * Let's do a quick pruning of connections that 
+                     * want to die by using the setTimeout(1); peekByte(); method.
+                     * */
+		     Connection[] all = freeConnections;
+		     freeConnections = [];
+		     UNLOCK
+		     {
+	                foreach(c : all) { if (tcpDead(c)) all.remove(c); }
+		     }
+		     LOCK
+		     freeConnections += all;
+		     /*
+                     * This can't be very long (at most nfreeconnection * 1ms) so let's keep
+                     * the lock for simplicity.
+                     */
+                    /* Then, reschedule this host for immediate recheck */
+                    setNextToMonitor(host);
+                    continue;
+                } else if (timeout) {
+                    /* Server hanged ? Checking all connections could be too costly
+                     * so kill all connections. We'll retry later
+                     */
+                    closeAllConnections(host);
+                    host.down = true;
+                    goto sleep;
+                } else if (success) {
+                    host.lastChecked = now();
+                    connection.lastChecked = now();
+                }
+            }
+            UNLOCK
+        }
+
+    }
