@@ -27,7 +27,7 @@ import com.sun.xml.internal.ws.api.pipe.NextAction;
 
 
 public class PoolMonitoringThread extends Thread {
-    MultiHostConnectionPool pool;
+    MonitoredHttpConnectionManager pool;
     
     boolean stop;
 
