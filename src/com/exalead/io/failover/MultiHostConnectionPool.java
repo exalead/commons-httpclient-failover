@@ -53,13 +53,22 @@ public class MultiHostConnectionPool {
         }
         return connectionConfiguration;
     }
+    
+    /* ***************** Global stuff ****************** */
+    
+    public synchronized void addHost(String host, int port, int power) {
+        HostState hs = new HostState();
+        hs.configuration = new HostConfiguration();
+        hs.configuration.setHost(host, port);
+        hs.power = power;
+        hosts.add(hs);
+        hostsMap.put(hs.configuration, hs);
+    }
 
     /** The list of all hosts in the pool */
     List<HostState> hosts;
     /** Fast access map by configuration */
     Map<HostConfiguration, HostState> hostsMap;
-
-    private IdleConnectionHandler idleConnectionHandler = new IdleConnectionHandler();        
 
     /**
      * Cleans up all connection pool resources.
@@ -97,26 +106,53 @@ public class MultiHostConnectionPool {
 
     /* *************************** Hosts round-robin dispatch ************************* */
 
-    /** Index of the next host in the list */
-    private int nextHost;
+    /** Index of the current host in the list */
+    private int currentHost;
     /** Number of dispatches already performed on current host */
     private int dispatchesOnCurrentHost;
 
     /** 
      * Get the host to use for next connection. 
      * It performs round-robin amongst currently alive hosts, respecting the power property.
-     * This method must be called with the pool lock. 
+     * This method must be called with the pool lock.
+     * TODO: Improve this method 
      */
-    private HostState getNextRoundRobinHost() {
-        // TODO
-        return null;
+    private HostState getNextRoundRobinHost() throws IOException {
+        if (dispatchesOnCurrentHost >= hosts.get(currentHost).power) {
+            /* Power reached, goto next */
+            dispatchesOnCurrentHost = 0;
+            currentHost++;
+        } else if (!hosts.get(currentHost).down) {
+            /* Power not reached */
+            dispatchesOnCurrentHost++;
+            return hosts.get(currentHost);
+        }
+        
+        boolean reachedEnd = false;
+        while (true) {
+            if (currentHost >= hosts.size()) {
+                if (reachedEnd) {
+                    /* Oops, all hosts are down ! */
+                    throw new IOException("All hosts are down");
+                }
+                currentHost = 0;
+                reachedEnd = true;
+            }
+            if (!hosts.get(currentHost).down) {
+                break;
+            } else {
+                currentHost++;
+            }
+        }
+        dispatchesOnCurrentHost = 1;
+        return hosts.get(currentHost);
     }
 
     /**
      * Get the host that should be used next in the round-robin dispatch
      * @return a HostConfiguration that should be passed to the HttpClient
      */
-    public HostConfiguration getHostToUse() {
+    public HostConfiguration getHostToUse() throws IOException {
         synchronized(this) { 
             HostState hs = getNextRoundRobinHost();
             return hs.configuration;
@@ -358,10 +394,7 @@ public class MultiHostConnectionPool {
             break;
 
         }
-
-
     }
-    
     
     /* *************************** Hosts monitoring scheduler ************************* */
     
@@ -392,215 +425,4 @@ public class MultiHostConnectionPool {
         alreadyMonitored.addLast(next);
         return next;
     }
-    
-    
-
-
-/* ***************** Main monitoring thread ***************** */
-
-/* The HTTPClient API does not give access to the connection itself, so we need to do the 
- * client-side code in two steps:
- *  - Get the identifier of a host
- *  - Ask HTTPClient to query it
- *     HTTPClient will call our acquireConnection() callback
- * 
- * If an error occurs, HTTPClient rethrows it, so in that case, we call hostFailure before
- * releasing the connection to HTTPClient. HTTPClient will then call our releaseConnection() callback
- */
-
-//    Host getHostToUse() {
-//        return hosts.filter(alive=true).roundRobin();
-//    }
-//
-//    Connection acquire(Host host) {
-//        while (true) {
-//            boolean needSynchronousCheck;
-//            Connection c;
-//            ACQUIRE
-//            {
-//                if (host.down) {
-//                    throw Exception("host is down");
-//                }
-//
-//                Connection[] recentlyChecked = host.connections.filter(lastChecked < 1000ms);
-//                if (recentlyChecked.length == 0) {
-//                    needsSynchronousCheck = true;
-//                    c = host.connections.get(oldest);
-//                } else if (host.connections.length > 0) {
-//                    c = recentlyChecked.get(oldest);
-//                }
-//            }
-//            RELEASE
-//
-//            /* There was no connection active for the host, so connect now */
-//            if (c == null) {
-//                needSynchronousCheck = false;
-//                c = connect(connectTimeout)
-//                if (failed) {
-//                    ACQUIRE
-//                    {
-//                        host.down = true;
-//                        // If the host has connections, it means that they were 
-//                        // established while we were trying to connect. .. So maybe the host
-//                        // is not down, but to be sure, let's still consider as down and 
-//                        // kill everything
-//                        killAllHostConnections(host);
-//                        throw Exception("host is down");
-//                    } 
-//                    RELEASE
-//                }
-//            }
-//
-//            /* The connection we got was too old, perform a quick check */
-//            if (needSynchronousCheck) {
-//                setIsAliveTimeout();
-//                /* Fast check */
-//                performHTTPOPTIONS(c);
-//                if (ok) {
-//                    break;
-//                } else if (timeout) {
-//                    ACQUIRE
-//                    {
-//                        /* Don't waste time, server is hanged */
-//                        host.down = true;
-//                        killAllHostConnections(host);
-//                        throw Exception("host is down");
-//                    }
-//                    RELEASE
-//                } else if (fail) {
-//                    ACQUIRE
-//                    {
-//                        /* Server looks down (connection RST ?), try to fast kill the connections */
-//                        killTCPResetConnections(host);
-//                        killConnection(c);
-//                        /* But we still retry with other connections OR retry a reconnect.*
-//                         * The loop will either run until we're out of potential victims or a connection
-//                         * works
-//                         */
-//                        host.down = true;
-//                        killAllHostConnections(host);
-//                        continue;
-//                    }
-//                    RELEASE
-//                }
-//            }
-//        }
-//        setApplicativeTimeout(c);
-//        return c;
-//    }
-//
-//    static local nextConnectionIsDead = { FALSE, TIMEOUT, FAILED }
-//    /** The client tells us about the failure of a host */
-//    void hostFailure(host, typeOfailure) {
-//        nextConnectionIsDead = typeOfFailure;
-//    }
-//
-//    void releaseConnection(Connection c) {
-//        if (nextConnectionIsDead == FAILED) {
-//            ACQUIRE
-//            {
-//                /* Ok, so c is brain dead */
-//                // Fast-kill the RST connections and schedule this host for immediate
-//                // check by the background thread
-//                killTCPResetConnections(host);
-//                setNextToMonitor(host);
-//            }
-//            RELEASE
-//        } else if (nextConnectionIsDead == TIMEOUT) {
-//            ACQUIRE
-//            {
-//                /* This one is the most tricky. 
-//                 * Maybe we timeouted because the query was too complex.
-//                 * But maybe it was because the remote host is down.
-//                 * So let's take an average path: we mark all connections for this
-//                 * host as very old so that they get rechecked before any attempt
-//                 * to use them.
-//                 */
-//                foreach (freeConnection){ lastChecked = 0; }
-//            }
-//            RELEASE
-//        } else {
-//            connection.lastUsed = now();
-//            /* It was just used successfully so mark it as checked */
-//            connection.lastChecked = now();
-//        }
-//
-//
-//        /* Reset the thread-local signalling variable */
-//        nextConnectionIsDead = FALSE;
-//    }
-//
-//    class MonitoringThread extends Thread {
-//        public void run() {
-//            while (!stop) {
-//                monitorLoop();
-//            }
-//        }
-//        
-//        public void monitorLoop() {
-//            ACQUIRE
-//            {
-//                HostState hs = nextToMonitor();
-//
-//                Connection c;
-//                if (freeConnections[host] != 0) {
-//                    c = removeOldestConnectionFromFree();
-//                }
-//            }
-//            RELEASE
-//
-//            /* No current connection for this host, need to connect */
-//            if (c == null) {
-//                try {
-//                    c = connect(isAliveTimeout);
-//                } onfail {
-//                    ACQUIRE
-//                    host.down = true;
-//                    killAllConnections() // See comment about concurrent connect in acquire()
-//                    RELEASE
-//                    goto sleep;
-//                } ontimeout {
-//                    ACQUIRE
-//                    host.down = true;
-//                    killAllConnections() // See comment about concurrent connect in acquire()
-//                    RELEASE
-//                    goto sleep;
-//                }
-//            }
-//
-//            setIsAliveTimeout();
-//            validateServerUsingConnection(c);
-//
-//            ACQUIRE
-//            {
-//                if (explicitFailure) {
-//                    /* Explicit error: connection reset ?
-//                     * There is only a low probability that just this connection is 
-//                     * in bad state, the host is probably down.
-//                     * Let's do a quick pruning of connections that 
-//                     * want to die by using the setTimeout(1); peekByte(); method.
-//                     * 
-//                     * This can't be very long (at most nfreeconnection * 1ms) so let's keep
-//                     * the lock for simplicity.
-//                     */
-//                    killTCPResetConnections(host);
-//                    /* Then, reschedule this host for immediate recheck */
-//                    setNextToMonitor(host);
-//                    continue;
-//                } else if (timeout) {
-//                    /* Server hanged ? Checking all connections could be too costly
-//                     * so kill all connections. We'll retry later
-//                     */
-//                    closeAllConnections(host);
-//                    host.down = true;
-//                    goto sleep;
-//                } else if (success) {
-//                    host.lastChecked = now();
-//                    connection.lastChecked = now();
-//                }
-//            }
-//            RELEASE
-//        }
-//
-//    }
 }

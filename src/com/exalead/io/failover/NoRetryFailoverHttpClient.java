@@ -1,6 +1,10 @@
 package com.exalead.io.failover;
 
+import java.io.IOException;
+
+import org.apache.commons.httpclient.HostConfiguration;
 import org.apache.commons.httpclient.HttpClient;
+import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
 
 public class NoRetryFailoverHttpClient {
@@ -13,10 +17,16 @@ public class NoRetryFailoverHttpClient {
     }
     
     public void addHost(String host, int port, int power) {
-        // TODO
+        manager.addHost(host, port, power);
     }
     
-    public void executeMethod(HttpMethod method) {
-        // TODO
+    public int executeMethod(HttpMethod method) throws HttpException, IOException {
+        HostConfiguration config = null;
+        
+        try {
+            return client.executeMethod(config, method);
+        } catch (IOException e) {
+            throw e;
+        }
     }
 }

@@ -28,14 +28,12 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     /** The default maximum number of connections allowed overall */
     public static final int DEFAULT_MAX_TOTAL_CONNECTIONS = 20;
 
-
     /** Collection of parameters associated with this connection manager. */
     private HttpConnectionManagerParams params = new HttpConnectionManagerParams(); 
     /** Connection Pool */
-    //private ConnectionPool connectionPool;
     private MultiHostConnectionPool connectionPool;
 
-   volatile boolean shutdown = false;
+    volatile boolean shutdown = false;
 
     /* ****************** Global methods *********************** */ 
 
@@ -58,6 +56,10 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                 connectionPool.shutdown();
             }
         }
+    }
+    
+    public void addHost(String host, int port, int power) {
+        connectionPool.addHost(host, port, power);
     }
 
     /* ****************** Main entry point : get connection *********************** */ 
