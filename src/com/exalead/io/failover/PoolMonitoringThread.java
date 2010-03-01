@@ -116,5 +116,7 @@ public class PoolMonitoringThread extends Thread {
         /* End check, end monitoringLoop */
     }
 
-    private static Logger logger = Logger.getLogger("monitored");
+    private static Logger logger = Logger.getLogger("httpclient.failover" +
+    		"" +
+    		"");
 }

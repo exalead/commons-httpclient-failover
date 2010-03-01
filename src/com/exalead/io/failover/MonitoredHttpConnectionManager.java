@@ -499,6 +499,8 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         }
 
         c.conn.setSocketTimeout(applicativeTimeout);
+        // We do stale checking ourselves, DO NOT do it !
+        c.conn.getParams().setStaleCheckingEnabled(false);
 
         host.inFlightConnections++;
 
@@ -560,9 +562,8 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         }
         
         if (!mc.conn.isOpen()) {
-            logger.warn("Releasing a CLOSED connection !");
+            logger.info("Releasing a CLOSED connection --> will make as if it was timeout (worse case)");
             synchronized(this) {
-                logger.warn("Previous action: UNKNOWN CLOSE !-> mark connections as old");
                 host.markConnectionsAsUnchecked();
             }
             NDC.pop();
