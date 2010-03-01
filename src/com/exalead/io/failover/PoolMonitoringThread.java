@@ -3,6 +3,8 @@ package com.exalead.io.failover;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 
+import org.apache.log4j.Logger;
+
 /**
  * @file
  * This class is largely derived of the MonitoredHttpConnectionManager.
@@ -19,12 +21,14 @@ public class PoolMonitoringThread extends Thread {
     public void run() {
         while (!stop) {
             monitorLoop();
+            try {Thread.sleep(500);} catch (InterruptedException e) {}
         }
     }
 
     public void monitorLoop() {
         HostState host = null;
         MonitoredConnection c = null;
+        System.out.println("*************** MONITOR LOOP START *****************");
         synchronized(pool) {
             host = pool.nextToMonitor();
 
@@ -47,15 +51,18 @@ public class PoolMonitoringThread extends Thread {
                     host.down = true;
                     host.killAllConnections();
                 }
+                return;
             }
         }
         
         if (c == null) throw new Error("Error, null connection");
 
         try {
+            logger.info("** Have a valid connection");
             boolean ret =  pool.checkConnection(c);
-            pool.checkConnection(c);
             if (ret == false) {
+                logger.info("** CHECK: host NOT alive");
+                
                 /* Host is up but not alive: just kill all connections.
                  * It's useless to try another connection: host knows it's not alive
                  */
@@ -64,12 +71,18 @@ public class PoolMonitoringThread extends Thread {
                     host.killAllConnections();
                 }
             } else {
+                System.out.println("** CHECK: host is alive");
+                
                 /* Everything OK */
+                host.down = false;
                 c.lastMonitoringTime = System.currentTimeMillis();
             }
         } catch (IOException e) {
             synchronized(pool) {
                 if (e instanceof SocketTimeoutException) {
+                    logger.info("** CHECK: host timeout");
+                    e.printStackTrace();
+                    
                     /* Timeout while trying to get isAlive -> host is hanged.
                      * Checking all connections could be too costly -> kill all connections.
                      * We'll retry later
@@ -79,6 +92,7 @@ public class PoolMonitoringThread extends Thread {
                     /* Don't forget to close this connection to avoid FD leak */
                     c.conn.close();
                 } else {
+                    System.out.println("** CHECK: host RST");
                     /* Connection failure. Server looks down (connection reset by peer). But it could
                      * be only that connection which failed (TCP timeout for example). In that case, 
                      * we just try to fast-kill the stale connections. 
@@ -94,4 +108,5 @@ public class PoolMonitoringThread extends Thread {
         /* End check, end monitoringLoop */
     }
 
+    private static Logger logger = Logger.getLogger("monitored");
 }

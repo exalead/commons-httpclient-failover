@@ -1,7 +1,10 @@
 package com.exalead.io.failover;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +16,7 @@ import org.apache.commons.httpclient.HttpConnectionManager;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpState;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpConnectionManagerParams;
 import org.apache.log4j.Logger;
 
@@ -52,6 +56,18 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         }
         return connectionConfiguration;
     }
+    static void consumeLastResponse(HttpConnection conn) {
+        InputStream lastResponse = conn.getLastResponseInputStream();
+        if (lastResponse != null) {
+            conn.setLastResponseInputStream(null);
+            try {
+                lastResponse.close();
+            } catch (IOException ioe) {
+                conn.close();
+            }
+        }
+    }
+    
 
     /* ***************** Global stuff ****************** */
 
@@ -72,12 +88,13 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         hs.power = power;
         hosts.add(hs);
         hostsMap.put(hs.configuration, hs);
+        nextToMonitorList.add(hs);
     }
 
     /** The list of all hosts in the pool */
-    List<HostState> hosts;
+    List<HostState> hosts = new ArrayList<HostState>();
     /** Fast access map by configuration */
-    Map<HostConfiguration, HostState> hostsMap;
+    Map<HostConfiguration, HostState> hostsMap = new HashMap<HostConfiguration, HostState>();
 
     /**
      * Shuts down the connection manager and releases all resources.  All connections associated 
@@ -115,7 +132,11 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
     /** Find a Host given its configuration. Must be called with the lock */
     private HostState getHostFromConfiguration(HostConfiguration config) {
-        return hostsMap.get(config);
+        HostState hs = hostsMap.get(config);
+        if (hs == null) {
+            throw new Error("Host: " + config +  " not found !");
+        }
+        return hs;
     }
 
     /* *************************** Hosts round-robin dispatch ************************* */
@@ -146,6 +167,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         while (true) {
             if (currentHost >= hosts.size()) {
                 if (reachedEnd) {
+                    currentHost = 0;
                     /* Oops, all hosts are down ! */
                     throw new IOException("All hosts are down");
                 }
@@ -180,6 +202,31 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     int applicativeTimeout = 5000;
 
     /* *************************** isAlive monitoring ************************* */
+    
+    /** Fake manager to which we "release" the isAlive connection */
+    static class DummyManager implements HttpConnectionManager {
+        public void closeIdleConnections(long idleTimeout) {
+        }
+        public HttpConnection getConnection(HostConfiguration hostConfiguration) {
+            return null;
+        }
+        public HttpConnection getConnection(HostConfiguration hostConfiguration, long timeout) {
+            return null;
+        }
+        public HttpConnection getConnectionWithTimeout(
+                HostConfiguration hostConfiguration, long timeout)
+                throws ConnectionPoolTimeoutException {
+            return null;
+        }
+        public HttpConnectionManagerParams getParams() {
+            return null;
+        }
+        public void releaseConnection(HttpConnection conn) {
+        }
+        public void setParams(HttpConnectionManagerParams params) {
+        }
+    }
+    DummyManager dummyManager = new DummyManager();
 
     /** 
      * Returns "true" if host is up and alive.
@@ -190,8 +237,14 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         /* TODO: HANDLE really state */
         HttpState hs = new HttpState();
         GetMethod gm = new GetMethod(connection.host.getURI() + "/isAlive");
+        
+        gm.getParams().setDefaults(new HttpClientParams());
+        
         connection.conn.setSocketTimeout(isAliveTimeout);
+        System.out.println("Will executed method, timeout is " + isAliveTimeout);
         int statusCode = gm.execute(hs, connection.conn);
+        connection.conn.setHttpConnectionManager(dummyManager);
+        consumeLastResponse(connection.conn);
         return statusCode < 400;
     }
 
@@ -308,6 +361,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
         try {
             connection = createConnection(hostConfiguration);
+            connection.setHttpConnectionManager(this);
         } catch (IOException e) {
             throw new FailureFakeConnectionPoolTimeoutException(e);
         }
@@ -568,33 +622,22 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     /* **************************** Inspection and helpers *************************** */
 
     /**
-     * Gets the total number of pooled connections for the given host configuration.  This 
-     * is the total number of connections that have been created and are still in use 
-     * by this connection manager for the host configuration.  This value will
-     * not exceed the {@link #getMaxConnectionsPerHost() maximum number of connections per
-     * host}.
-     * 
-     * @param hostConfiguration The host configuration
-     * @return The total number of pooled connections
+     * Gets the total number of currently active connections
      */
-    public int getConnectionsInPool(HostConfiguration hostConfiguration) {
+    public int getActiveConnections() {
         // TODO
         return 0;
     }
 
     /**
-     * Gets the total number of pooled connections.  This is the total number of 
-     * connections that have been created and are still in use by this connection 
-     * manager.  This value will not exceed the {@link #getMaxTotalConnections() 
-     * maximum number of connections}.
-     * 
-     * @return the total number of pooled connections
+     * Gets the total number of free (in pool) connections.
      */
     public int getConnectionsInPool() {
         // TODO
         return 0;
     }
 
+    /** TODO: really needed ? */
     public void closeIdleConnections(long idleTimeout) {
         // TODO
     }

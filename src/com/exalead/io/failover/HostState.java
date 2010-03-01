@@ -60,11 +60,11 @@ public class HostState {
     
     MonitoredConnection connect(int timeout) throws IOException {
         MonitoredConnection newConn = new MonitoredConnection();
-        HttpConnection hc = new HttpConnection(configuration);
-        hc.getParams().setConnectionTimeout(timeout);
-        hc.open();
+        newConn.host = this;
+        newConn.conn = new HttpConnection(configuration);
+        newConn.conn.getParams().setConnectionTimeout(timeout);
+        newConn.conn.open();
         newConn.lastMonitoringTime = System.currentTimeMillis();
-        newConn.conn = hc;
         return newConn;
     }
     
