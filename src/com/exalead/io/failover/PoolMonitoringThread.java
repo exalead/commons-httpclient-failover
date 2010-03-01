@@ -21,14 +21,14 @@ public class PoolMonitoringThread extends Thread {
     public void run() {
         while (!stop) {
             monitorLoop();
-            try {Thread.sleep(500);} catch (InterruptedException e) {}
+            try {Thread.sleep(2500);} catch (InterruptedException e) {}
         }
     }
 
     public void monitorLoop() {
         HostState host = null;
         MonitoredConnection c = null;
-        System.out.println("*************** MONITOR LOOP START *****************");
+        logger.info("******** Start monitoring loop");
         synchronized(pool) {
             host = pool.nextToMonitor();
 
@@ -39,14 +39,18 @@ public class PoolMonitoringThread extends Thread {
             if (c != null) {
                 host.removeFreeConnection(c);
             }
+            logger.info("Start monitoring loop: monitor " + host + " have connection = " + (c != null));
         }
 
         /* There is no current connection for this host, so we need to connect */
         if (c == null) {
             try {
+                logger.info("[Monitoring] Connect");
                 c = host.connect(pool.connectionTimeout);
             } catch (IOException e) {
                 synchronized(pool) {
+                    logger.info("[Monitoring] Connection failed: " + e.getMessage());
+                    
                     /* Same logic than in pool.acquire. See comment there. */
                     host.down = true;
                     host.killAllConnections();
@@ -58,11 +62,10 @@ public class PoolMonitoringThread extends Thread {
         if (c == null) throw new Error("Error, null connection");
 
         try {
-            logger.info("** Have a valid connection");
+            logger.info("[Monitoring] Check connection");
             boolean ret =  pool.checkConnection(c);
             if (ret == false) {
-                logger.info("** CHECK: host NOT alive");
-                
+                logger.info("[Monitoring] Host NOT alive");
                 /* Host is up but not alive: just kill all connections.
                  * It's useless to try another connection: host knows it's not alive
                  */
@@ -71,17 +74,16 @@ public class PoolMonitoringThread extends Thread {
                     host.killAllConnections();
                 }
             } else {
-                System.out.println("** CHECK: host is alive");
-                
+                logger.info("[Monitoring] Host alive");
                 /* Everything OK */
                 host.down = false;
                 c.lastMonitoringTime = System.currentTimeMillis();
+                host.addFreeConnection(c);
             }
         } catch (IOException e) {
             synchronized(pool) {
                 if (e instanceof SocketTimeoutException) {
-                    logger.info("** CHECK: host timeout");
-                    e.printStackTrace();
+                    logger.info("[Monitoring] Host timeout");
                     
                     /* Timeout while trying to get isAlive -> host is hanged.
                      * Checking all connections could be too costly -> kill all connections.
@@ -92,7 +94,7 @@ public class PoolMonitoringThread extends Thread {
                     /* Don't forget to close this connection to avoid FD leak */
                     c.conn.close();
                 } else {
-                    System.out.println("** CHECK: host RST");
+                    logger.info("[Monitoring] Host RST");
                     /* Connection failure. Server looks down (connection reset by peer). But it could
                      * be only that connection which failed (TCP timeout for example). In that case, 
                      * we just try to fast-kill the stale connections. 

@@ -31,7 +31,7 @@ public class MyTest {
     class MyThread extends Thread {
         public void run() {
             while (true) {
-                try {Thread.sleep(5000);} catch (InterruptedException e) {}
+                try {Thread.sleep(500);} catch (InterruptedException e) {}
 
                 GetMethod httpMethod = new GetMethod("/exascript/Ping");
                 try {

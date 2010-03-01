@@ -34,7 +34,7 @@ import org.apache.log4j.Logger;
 public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     /* **************** Static helpers ******************** */
 
-    private static final Logger LOG = Logger.getLogger("monitored");
+    private static final Logger logger = Logger.getLogger("httpclient.failover");
 
     /**
      * Gets the host configuration for a connection.
@@ -259,13 +259,8 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             try {
                 return getConnectionWithTimeout(hostConfiguration, 0);
             } catch (ConnectionPoolTimeoutException e) {
-                // we'll go ahead and log this, but it should never happen. HttpExceptions
-                // are only thrown when the timeout occurs and since we have no timeout
-                // it should never happen.
-                LOG.debug(
-                        "Unexpected exception while waiting for connection",
-                        e
-                );
+                // This should not happen as, without timeout, we loop until we have something
+                logger.error("Unexpected exception while waiting for connection", e);
             }
         }
     }
@@ -290,18 +285,14 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      */
     public HttpConnection getConnectionWithTimeout(HostConfiguration hostConfiguration, 
             long timeout) throws ConnectionPoolTimeoutException {
-
-        LOG.trace("enter HttpConnectionManager.getConnectionWithTimeout(HostConfiguration, long)");
+        logger.trace("enter HttpConnectionManager.getConnectionWithTimeout(HostConfiguration, long)");
 
         if (hostConfiguration == null) {
             throw new IllegalArgumentException("hostConfiguration is null");
         }
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("HttpConnectionManager.getConnection:  config = "
-                    + hostConfiguration + ", timeout = " + timeout);
-        }
-
+        logger.debug("HttpConnectionManager.getConnection:  config = " + hostConfiguration + ", timeout = " + timeout);
+        
         final HttpConnection conn = doGetConnection(hostConfiguration, timeout);
 
         // wrap the connection in an adapter so we can ensure it is used 
@@ -317,7 +308,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     public HttpConnection getConnection(HostConfiguration hostConfiguration, 
             long timeout) throws HttpException {
 
-        LOG.trace("enter HttpConnectionManager.getConnection(HostConfiguration, long)");
+        logger.trace("enter HttpConnectionManager.getConnection(HostConfiguration, long)");
         try {
             return getConnectionWithTimeout(hostConfiguration, timeout);
         } catch(ConnectionPoolTimeoutException e) {
@@ -393,6 +384,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
             /* Try to select an existing connection */
             synchronized(this) {
+                logger.info("Acquire connection for " + host);
                 long now = System.currentTimeMillis();
 
                 if (host.down) {
@@ -402,12 +394,14 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                 long minDate = now - maxCheckDelayWithoutSynchronousCheck;
                 List<MonitoredConnection> recentlyChecked = host.getRecentlyCheckedConnections(minDate);
                 if (recentlyChecked.size() == 0) {
+                    logger.info("No recently checked connection");
                     /* There is no recently checked connection */
                     needSynchronousCheck = true;
                     /* Let's help a bit the monitoring thread by taking a connection that was not checked recently */
                     c = host.getOldestCheckedConnection();
                 } else {
                     /** TODO: better scheduling ? */
+                    logger.info("Have a recently checked connection");
                     c = recentlyChecked.get(0);
                 }
 
@@ -420,12 +414,14 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             if (c == null) {
                 needSynchronousCheck = false;
                 try {
+                    logger.info("No free connection, connect !");
                     c = host.connect(connectionTimeout);
                 } catch (IOException e) {
                     /* In that case, we don't care if it's a fail or timeout:
                      * we can't connect to the host in time, so the host is down.
                      */
                     synchronized(this) {
+                        logger.info("Connection failed: " + e.getMessage() +" --> host is down");
                         host.down = true;
                         // If the host has connections, it means that they were 
                         // established while we were trying to connect. .. So maybe the host
@@ -441,6 +437,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             /* The connection we got was too old, perform a check */
             if (needSynchronousCheck) {
                 try {
+                    logger.info("[Acquire] Check connection for " + host);
                     boolean ret = checkConnection(c);
                     /* Host is up but not alive: just kill all connections.
                      * It's useless to try another connection: host knows it's not alive
@@ -448,11 +445,13 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
                     if (ret == false) {
                         synchronized(this) {
+                            logger.info("not alive");
                             host.down = true;
                             host.killAllConnections();
                             throw new IOException("Host is down (not alive)");
                         }
                     } else {
+                        logger.info("Connection OK");
                         // Great, we have a working connection !
                         break;
                     }
@@ -463,6 +462,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                              * Don't waste time checking connections, we would just timeout more.
                              * So, kill everything
                              */
+                            logger.info("[Acquire] host timeout");
                             host.down = true;
                             host.killAllConnections();
                             /* Don't forget to close this connection to avoid FD leak */
@@ -475,6 +475,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                              * some alive connections and we can retry with them, or the loop will try to 
                              * reconnect and success (for example, the host went down and up very fast) or fail 
                              */
+                            logger.info("[Acquire] host RST");
                             host.killStaleConnections();
                             /* Don't forget to close this connection to avoid FD leak */
                             c.conn.close();
@@ -528,7 +529,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      * @param conn the HttpConnection to make available.
      */
     public void releaseConnection(HttpConnection conn) {
-        LOG.trace("enter HttpConnectionManager.releaseConnection(HttpConnection)");
+        logger.trace("enter HttpConnectionManager.releaseConnection(HttpConnection)");
 
         if (conn instanceof HttpConnectionAdapter) {
             conn = ((HttpConnectionAdapter) conn).getWrappedConnection();
@@ -549,7 +550,16 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         if (nextReleasedConnectionFailureType.get() == null) {
             nextReleasedConnectionFailureType.set(FailureType.OK);
         }
-
+        
+        if (!mc.conn.isOpen()) {
+            logger.warn("Releasing a CLOSED connection !");
+            synchronized(this) {
+                logger.warn("Previous action: UNKNOWN CLOSE !-> mark connections as old");
+                host.markConnectionsAsUnchecked();
+            }
+            return;
+        }
+  
         switch(nextReleasedConnectionFailureType.get()) {
         case TIMEOUT:
             /* This case is the most tricky.
@@ -559,6 +569,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
              * to use them.
              */
             synchronized(this) {
+                logger.info("Previous action: timeout -> mark connections as old");
                 host.markConnectionsAsUnchecked();
             }
             /* As a safety measure, we kill this connection and don't enqueue it */
@@ -570,6 +581,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
              * schedule the server for monitoring ASAP.
              */
             synchronized(this) {
+                logger.info("Previous action: error -> kill stale connections and reschedule");
                 host.killStaleConnections();
                 setNextToMonitor(host);
             }
@@ -580,6 +592,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         case OK:
             long now = System.currentTimeMillis();
             synchronized(this) {
+                logger.info("Previous action: OK");
                 mc.lastMonitoringTime = now;
                 mc.lastUseTime = now;
                 host.addFreeConnection(mc);
@@ -587,6 +600,9 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             break;
 
         }
+        
+        // Reset the thread-local variable
+        nextReleasedConnectionFailureType.set(FailureType.OK);
     }
 
     /* *************************** Hosts monitoring scheduler ************************* */
