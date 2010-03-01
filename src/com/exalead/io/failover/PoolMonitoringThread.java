@@ -2,21 +2,6 @@ package com.exalead.io.failover;
 
 import java.io.IOException;
 import java.net.SocketTimeoutException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.commons.httpclient.ConnectTimeoutException;
-import org.apache.commons.httpclient.HostConfiguration;
-import org.apache.commons.httpclient.HttpConnection;
-import org.apache.commons.httpclient.HttpState;
-import org.apache.commons.httpclient.methods.GetMethod;
-import org.apache.commons.httpclient.util.IdleConnectionHandler;
-import org.apache.log4j.Logger;
-
-import com.sun.xml.internal.ws.api.pipe.NextAction;
 
 /**
  * @file
@@ -64,6 +49,8 @@ public class PoolMonitoringThread extends Thread {
                 }
             }
         }
+        
+        if (c == null) throw new Error("Error, null connection");
 
         try {
             boolean ret =  pool.checkConnection(c);

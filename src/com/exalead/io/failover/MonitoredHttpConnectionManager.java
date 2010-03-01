@@ -297,10 +297,10 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         hostConfiguration = new HostConfiguration(hostConfiguration);
 
         // TODO: timeout stuff 
-        boolean useTimeout = (timeout > 0);
-        long timeToWait = timeout;
-        long startWait = 0;
-        long endWait = 0;
+        //boolean useTimeout = (timeout > 0);
+        //long timeToWait = timeout;
+        //long startWait = 0;
+        //long endWait = 0;
 
         if (shutdown) {
             throw new IllegalStateException("Connection factory has been shutdown.");
@@ -382,6 +382,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                     }
                 }
             }
+            if (c == null) throw new Error("Error, null connection");
 
             /* The connection we got was too old, perform a check */
             if (needSynchronousCheck) {
