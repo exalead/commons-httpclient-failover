@@ -19,6 +19,7 @@ import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpConnectionManagerParams;
 import org.apache.log4j.Logger;
+import org.apache.log4j.NDC;
 
 /**
  * @file
@@ -351,10 +352,13 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         }
 
         try {
+            NDC.push("acquire");
             connection = createConnection(hostConfiguration);
             connection.setHttpConnectionManager(this);
         } catch (IOException e) {
             throw new FailureFakeConnectionPoolTimeoutException(e);
+        } finally {
+            NDC.pop();
         }
         return connection;
     }    
@@ -506,6 +510,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
          */
 
         /* We loose the association with the monitored connection, we'll recreate one at release time */
+        
         return c.conn;
     }
 
@@ -529,6 +534,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      * @param conn the HttpConnection to make available.
      */
     public void releaseConnection(HttpConnection conn) {
+        NDC.push("release");
         logger.trace("enter HttpConnectionManager.releaseConnection(HttpConnection)");
 
         if (conn instanceof HttpConnectionAdapter) {
@@ -541,6 +547,8 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         synchronized(this) {
             host = getHostFromConfiguration(config);
         }
+        
+        host.inFlightConnections--;
 
         /* Rebuild the MonitoredConnection object */
         MonitoredConnection mc = new MonitoredConnection();
@@ -557,6 +565,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                 logger.warn("Previous action: UNKNOWN CLOSE !-> mark connections as old");
                 host.markConnectionsAsUnchecked();
             }
+            NDC.pop();
             return;
         }
   
@@ -600,9 +609,9 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             break;
 
         }
-        
         // Reset the thread-local variable
         nextReleasedConnectionFailureType.set(FailureType.OK);
+        NDC.pop();
     }
 
     /* *************************** Hosts monitoring scheduler ************************* */

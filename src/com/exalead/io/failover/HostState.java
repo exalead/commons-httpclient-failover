@@ -28,6 +28,10 @@ public class HostState {
     public String getURI() {
         return configuration.getHostURL();
     }
+    
+    public String toString() {
+        return "[HS: " + getURI() + ",down=" + down + ",fc=" + freeConnections.size() + ",ac=" + inFlightConnections +"]";
+    }
 
     /** Get the connections that were checked after "minDate" */
     List<MonitoredConnection> getRecentlyCheckedConnections(long minDate) {

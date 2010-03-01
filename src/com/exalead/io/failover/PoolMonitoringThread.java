@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.SocketTimeoutException;
 
 import org.apache.log4j.Logger;
+import org.apache.log4j.NDC;
 
 /**
  * @file
@@ -19,19 +20,22 @@ public class PoolMonitoringThread extends Thread {
     boolean stop;
 
     public void run() {
+        NDC.push("PoolMonitoring");
         while (!stop) {
             monitorLoop();
             try {Thread.sleep(2500);} catch (InterruptedException e) {}
         }
+        NDC.pop();
     }
 
     public void monitorLoop() {
         HostState host = null;
         MonitoredConnection c = null;
+        
         logger.info("******** Start monitoring loop");
         synchronized(pool) {
             host = pool.nextToMonitor();
-
+            NDC.push("monitor:" + host.getURI());
             /* We'll monitor this host using the connection that hasn't been checked for 
              * the most time
              */
@@ -55,6 +59,7 @@ public class PoolMonitoringThread extends Thread {
                     host.down = true;
                     host.killAllConnections();
                 }
+                NDC.pop();
                 return;
             }
         }
@@ -107,6 +112,7 @@ public class PoolMonitoringThread extends Thread {
                 }
             }
         }
+        NDC.pop();
         /* End check, end monitoringLoop */
     }
 

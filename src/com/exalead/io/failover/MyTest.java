@@ -31,7 +31,7 @@ public class MyTest {
     class MyThread extends Thread {
         public void run() {
             while (true) {
-                try {Thread.sleep(500);} catch (InterruptedException e) {}
+                try {Thread.sleep(300);} catch (InterruptedException e) {}
 
                 GetMethod httpMethod = new GetMethod("/exascript/Ping");
                 try {
@@ -58,6 +58,7 @@ public class MyTest {
 
         relay = new NoRetryFailoverHttpClient();
         relay.addHost("localhost", 31604, 1);
+        relay.addHost("localhost", 31616, 1);
         PoolMonitoringThread pmt = new PoolMonitoringThread();
         pmt.pool = relay.manager;
         pmt.start();
