@@ -18,6 +18,8 @@
      *    the N oldest".
      */
 
+    /* ******************* Main monitoring structures ***************** */
+
     class MonitoredConnection {
 	HttpConnection conn;
 	long lastCheked;
@@ -37,6 +39,8 @@
     int curHostAlreadyUsed;
 
 
+    /* ************************ Connection+host acquire/release *************************/
+
     Host getHostToUse() {
 	LOCK
         return hosts.filter(alive=true).roundRobin();
@@ -45,6 +49,8 @@
 
     Connection acquire(HostConfiguration config) {
 	Host host = getHostFromConfig(config);
+	/* TODO: limit number of iterations to avoid potential race condition
+	 * between monitoring thread and this loop */
         while (true) {
             boolean needSynchronousCheck = false;
             Connection c;
@@ -165,8 +171,8 @@
         nextConnectionIsDead = FALSE;
     }
 
-    /* ********* Structures for scheduling of monitoring *********** */
-
+    /* *********** Structures for scheduling of monitoring ************ */
+*
     // TODO: improve this by providing exponential backoff when a host is hanged
     // This will avoid slowing down the monitoring loop in that case
     // TODO: Several priority queues ?
@@ -191,6 +197,13 @@
 	TODO
 	nextToMonitor.push_front(hs);
     }
+
+
+    /* ************************ Monitoring background thread *************************/
+
+    /** 
+     * It should be noted that several monitoring threads are possible
+     */
 
     class MonitoringThread extends Thread {
         public void run() {
