@@ -376,7 +376,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             }
         }
         if (connection == null) {
-           throw new PoolAcquireException("All hosts are down");
+            throw new PoolAcquireException("All hosts are down");
         }
         connection.setHttpConnectionManager(this);
         return connection;
@@ -536,23 +536,10 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
          */
 
         /* We loose the association with the monitored connection, we'll recreate one at release time */
-
         return c.conn;
     }
 
     /* ************************ Entry point: release ******************** */
-
-    public enum FailureType {
-        OK,
-        TIMEOUT,
-        OTHER_ERROR
-    }
-
-    static ThreadLocal<FailureType> nextReleasedConnectionFailureType = new ThreadLocal<FailureType>();
-
-    public void onHostFailure(HostConfiguration host, FailureType type) {
-        nextReleasedConnectionFailureType.set(type);
-    }
 
     /**
      * Marks the given connection as free and available for use by other requests.
@@ -569,73 +556,37 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
         /* Find the host state for this connection */
         HostConfiguration config = rebuildConfigurationFromConnection(conn);
-        HostState host = null;
-        synchronized(this) {
-            host = getHostFromConfiguration(config);
-        }
-
-        host.inFlightConnections--;
 
         /* Rebuild the MonitoredConnection object */
         MonitoredConnection mc = new MonitoredConnection();
         mc.conn = conn;
-        mc.host = host;
 
-        if (nextReleasedConnectionFailureType.get() == null) {
-            nextReleasedConnectionFailureType.set(FailureType.OK);
-        }
-
-        if (!mc.conn.isOpen()) {
-            logger.info("Releasing a CLOSED connection --> will make as if it was timeout (worse case)");
-            synchronized(this) {
+        synchronized(this) {
+            HostState host = getHostFromConfiguration(config); 
+            mc.host = host;
+            host.inFlightConnections--;
+            
+            if (!mc.conn.isOpen()) {
+                logger.info("Releasing a CLOSED connection !");
+                // OK, this case is the most tricky.
+                // What we know is that something went wrong with this connection, but we don't
+                // know if it was reset or timeout, because HttpClient has already hidden the details :(
+                // 
+                // Maybe just the connection was broken or maybe the host is down
+                //
+                // So let's take an average path: we mark all free connections for this
+                // host as very old so that they get rechecked before any attempt
+                // to use them. Basically, we tell everyone "don't trust this host, check first"
                 host.markConnectionsAsUnchecked();
-            }
-            NDC.pop();
-            return;
-        }
+            } else {
+                long now = System.currentTimeMillis();
 
-        switch(nextReleasedConnectionFailureType.get()) {
-        case TIMEOUT:
-            /* This case is the most tricky.
-             * But maybe it was because the remote host is down.
-             * So let's take an average path: we mark all free connections for this
-             * host as very old so that they get rechecked before any attempt
-             * to use them.
-             */
-            synchronized(this) {
-                logger.info("Previous action: timeout -> mark connections as old");
-                host.markConnectionsAsUnchecked();
-            }
-            /* As a safety measure, we kill this connection and don't enqueue it */
-            mc.conn.close();
-            break;
-
-        case OTHER_ERROR:
-            /* Connection is dead, so we fast-kill the stale connections and we
-             * schedule the server for monitoring ASAP.
-             */
-            synchronized(this) {
-                logger.info("Previous action: error -> kill stale connections and reschedule");
-                host.killStaleConnections();
-                setNextToMonitor(host);
-            }
-            /* And don't forget to kill this connection */
-            mc.conn.close();
-            break;
-
-        case OK:
-            long now = System.currentTimeMillis();
-            synchronized(this) {
-                logger.info("Previous action: OK");
                 mc.lastMonitoringTime = now;
                 mc.lastUseTime = now;
                 host.addFreeConnection(mc);
-            }
-            break;
 
+            }
         }
-        // Reset the thread-local variable
-        nextReleasedConnectionFailureType.set(FailureType.OK);
         NDC.pop();
     }
 

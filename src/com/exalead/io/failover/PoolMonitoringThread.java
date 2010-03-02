@@ -16,16 +16,15 @@ import org.apache.log4j.NDC;
 
 public class PoolMonitoringThread extends Thread {
     MonitoredHttpConnectionManager pool;
+    volatile boolean stop;
+    int loopDelay = 1000;
     
-    boolean stop;
-
     public void run() {
-        NDC.push("PoolMonitoring");
+        Thread.currentThread().setName("PoolMonitoring-" + Thread.currentThread().getId());
         while (!stop) {
             monitorLoop();
-            try {Thread.sleep(1000);} catch (InterruptedException e) {}
+            try {Thread.sleep(loopDelay);} catch (InterruptedException e) {}
         }
-        NDC.pop();
     }
 
     public void monitorLoop() {
