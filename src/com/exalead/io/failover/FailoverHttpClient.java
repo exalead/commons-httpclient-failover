@@ -1,7 +1,6 @@
 package com.exalead.io.failover;
 
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,8 +12,6 @@ import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpMethodParams;
 import org.apache.log4j.Logger;
-
-//import com.exalead.io.failover.MonitoredHttpConnectionManager.FailureType;
 
 public class FailoverHttpClient {
     protected MonitoredHttpConnectionManager manager;

@@ -2,19 +2,10 @@ package com.exalead.io.failover;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.httpclient.HostConfiguration;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpMethod;
-import org.apache.commons.httpclient.HttpVersion;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
-import org.apache.commons.httpclient.NameValuePair;
 import org.apache.commons.httpclient.methods.GetMethod;
-import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -51,7 +42,7 @@ public class MyTest {
                     GetMethod httpMethod = new GetMethod("/exascript/Ping");
                     try {
                         //logger.info("********** START method");
-                        int retcode = relay.executeMethod(httpMethod);
+                        relay.executeMethod(httpMethod);
                         //logger.info("********** DONE");
                         InputStream is = httpMethod.getResponseBodyAsStream();
                         is.close();
