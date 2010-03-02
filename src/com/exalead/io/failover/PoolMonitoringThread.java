@@ -35,7 +35,6 @@ public class PoolMonitoringThread extends Thread {
         HostState host = null;
         MonitoredConnection c = null;
         
-        
         synchronized(pool) {
             host = pool.nextToMonitor();
             NDC.push("monitor:" + host.getURI());
@@ -87,9 +86,11 @@ public class PoolMonitoringThread extends Thread {
                     if (logger.isDebugEnabled()) logger.debug("Host is alive: " + host);
                 }
                 /* Everything OK */
-                host.down = false;
-                c.lastMonitoringTime = System.currentTimeMillis();
-                host.addFreeConnection(c);
+                synchronized(pool) {
+                    host.down = false;
+                    c.lastMonitoringTime = System.currentTimeMillis();
+                    host.addFreeConnection(c);
+                }
             }
         } catch (IOException e) {
             synchronized(pool) {

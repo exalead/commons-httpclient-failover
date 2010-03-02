@@ -36,6 +36,7 @@ public class FailoverHttpClient {
         for (int i = 0; i < nthreads; i++) {
             PoolMonitoringThread pmt = new PoolMonitoringThread();
             pmt.loopDelay = delay;
+            pmt.pool = manager;
             pmt.start();
             threads.add(pmt);
         }

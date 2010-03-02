@@ -19,7 +19,7 @@ public class MyTest {
     class MyThread extends Thread {
         public void run() {
             while (true) {
-                try {Thread.sleep(300);} catch (InterruptedException e) {}
+                try {Thread.sleep(30);} catch (InterruptedException e) {}
                 
                 /*
 
@@ -67,11 +67,10 @@ public class MyTest {
        // Logger.getLogger("org").setLevel(Level.TRACE);
 
         relay = new FailoverHttpClient();
-        relay.addHost("localhost", 31604, 1);
+        relay.setConnectionAcquireTimeout(300);
+        relay.addHost("localhost", 31606, 1);
         relay.addHost("localhost", 31616, 1);
-        PoolMonitoringThread pmt = new PoolMonitoringThread();
-        pmt.pool = relay.manager;
-        pmt.start();
+        relay.startMonitoring(1);
         
         List<MyThread> threads = new ArrayList<MyThread>();
         for (int i = 0; i < 12; i++) {

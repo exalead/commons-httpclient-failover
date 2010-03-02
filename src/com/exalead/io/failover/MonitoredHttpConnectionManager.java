@@ -209,7 +209,6 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         gm.getParams().setDefaults(new HttpClientParams());
 
         connection.conn.setSocketTimeout(isAliveTimeout);
-        System.out.println("Will executed method, timeout is " + isAliveTimeout);
         int statusCode = gm.execute(hs, connection.conn);
         connection.conn.setHttpConnectionManager(dummyManager);
         consumeLastResponse(connection.conn);
@@ -367,6 +366,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                 long now = System.currentTimeMillis();
 
                 if (host.down) {
+                    logger.info("oups, host is down: " + host);
                     throw new PoolAcquireException("Host is down (marked as down)");
                 }
 
