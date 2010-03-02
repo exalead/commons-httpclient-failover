@@ -14,11 +14,11 @@ import org.apache.log4j.Logger;
 
 import com.exalead.io.failover.MonitoredHttpConnectionManager.FailureType;
 
-public class NoRetryFailoverHttpClient {
+public class FailoverHttpClient {
     protected MonitoredHttpConnectionManager manager;
     protected HttpClient client;
     
-    public NoRetryFailoverHttpClient() {
+    public FailoverHttpClient() {
         manager = new MonitoredHttpConnectionManager();
         
         client = new HttpClient(manager);

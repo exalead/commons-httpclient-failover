@@ -23,10 +23,7 @@ import org.apache.log4j.Logger;
 public class MyTest {
     private static Logger logger = Logger.getLogger("log");
 
-    /**
-     * @param args
-     */
-    NoRetryFailoverHttpClient relay;
+    FailoverHttpClient relay;
 
     class MyThread extends Thread {
         public void run() {
@@ -78,7 +75,7 @@ public class MyTest {
         Logger.getLogger("httpclient").setLevel(Level.INFO);
        // Logger.getLogger("org").setLevel(Level.TRACE);
 
-        relay = new NoRetryFailoverHttpClient();
+        relay = new FailoverHttpClient();
         relay.addHost("localhost", 31604, 1);
         relay.addHost("localhost", 31616, 1);
         PoolMonitoringThread pmt = new PoolMonitoringThread();
