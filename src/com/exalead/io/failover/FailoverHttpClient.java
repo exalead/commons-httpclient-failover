@@ -49,6 +49,22 @@ public class FailoverHttpClient {
         manager.isAlivePath = isAlivePath;
     }
     
+    /**
+     * Set the timeout for establishing connection
+     * @param timeout timeout in milliseconds
+     */
+    public void setConnectTimeout(int timeout) {
+        manager.connectionTimeout = timeout;
+    }
+    
+    /**
+     * Set the timeout for the isAlive service to answer
+     * @param timeout timeout in milliseconds
+     */
+    public void setIsAliveTimeout(int timeout) {
+        manager.isAliveTimeout = timeout;
+    }
+
 //    /** Maximum time to wait for a connection to become available
 //     * (if all hosts are not down and max number of connections
 //     * is exceeded)
