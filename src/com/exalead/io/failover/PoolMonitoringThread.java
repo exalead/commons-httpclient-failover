@@ -27,14 +27,20 @@ public class PoolMonitoringThread extends Thread {
         }
     }
 
+    /** 
+     * Each loop of the monitoring thread checks one specific host using one
+     * specific connection
+     */
     public void monitorLoop() {
         HostState host = null;
         MonitoredConnection c = null;
         
-        logger.info("******** Start monitoring loop");
+        
         synchronized(pool) {
             host = pool.nextToMonitor();
             NDC.push("monitor:" + host.getURI());
+            logger.info("Start monitoring loop");
+            
             /* We'll monitor this host using the connection that hasn't been checked for 
              * the most time
              */
@@ -42,18 +48,16 @@ public class PoolMonitoringThread extends Thread {
             if (c != null) {
                 host.removeFreeConnection(c);
             }
-            logger.info("Start monitoring loop: monitor " + host + " have connection = " + (c != null));
         }
 
         /* There is no current connection for this host, so we need to connect */
         if (c == null) {
             try {
-                logger.info("[Monitoring] Connect");
+                logger.debug("connect to host");
                 c = host.connect(pool.connectionTimeout);
             } catch (IOException e) {
                 synchronized(pool) {
-                    logger.info("[Monitoring] Connection failed: " + e.getMessage());
-                    
+                    logger.info("Connection failed: " + e.getMessage());
                     /* Same logic than in pool.acquire. See comment there. */
                     host.down = true;
                     host.killAllConnections();
@@ -66,10 +70,9 @@ public class PoolMonitoringThread extends Thread {
         if (c == null) throw new Error("Error, null connection");
 
         try {
-            logger.info("[Monitoring] Check connection");
             boolean ret =  pool.checkConnection(c);
             if (ret == false) {
-                logger.info("[Monitoring] Host NOT alive");
+                logger.info("Host is not alive: " + host);
                 /* Host is up but not alive: just kill all connections.
                  * It's useless to try another connection: host knows it's not alive
                  */
@@ -78,7 +81,11 @@ public class PoolMonitoringThread extends Thread {
                     host.killAllConnections();
                 }
             } else {
-                logger.info("[Monitoring] Host alive");
+                if (host.down) {
+                    logger.info("Host is alive: " + host);
+                } else {
+                    if (logger.isDebugEnabled()) logger.debug("Host is alive: " + host);
+                }
                 /* Everything OK */
                 host.down = false;
                 c.lastMonitoringTime = System.currentTimeMillis();
@@ -87,7 +94,7 @@ public class PoolMonitoringThread extends Thread {
         } catch (IOException e) {
             synchronized(pool) {
                 if (e instanceof SocketTimeoutException) {
-                    logger.info("[Monitoring] Host timeout");
+                    logger.info("Host isAlive check timeout: " + host);
                     
                     /* Timeout while trying to get isAlive -> host is hanged.
                      * Checking all connections could be too costly -> kill all connections.
@@ -98,7 +105,7 @@ public class PoolMonitoringThread extends Thread {
                     /* Don't forget to close this connection to avoid FD leak */
                     c.conn.close();
                 } else {
-                    logger.info("[Monitoring] Host RST");
+                    logger.info("Host isAlive check failure:"  + host);
                     /* Connection failure. Server looks down (connection reset by peer). But it could
                      * be only that connection which failed (TCP timeout for example). In that case, 
                      * we just try to fast-kill the stale connections. 
@@ -115,7 +122,5 @@ public class PoolMonitoringThread extends Thread {
         /* End check, end monitoringLoop */
     }
 
-    private static Logger logger = Logger.getLogger("httpclient.failover" +
-    		"" +
-    		"");
+    private static Logger logger = Logger.getLogger("httpclient.failover");
 }

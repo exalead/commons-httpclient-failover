@@ -50,9 +50,9 @@ public class MyTest {
                 for (int i = 0; i < 2; i++) {
                     GetMethod httpMethod = new GetMethod("/exascript/Ping");
                     try {
-                        logger.info("********** START method");
+                        //logger.info("********** START method");
                         int retcode = relay.executeMethod(httpMethod);
-                        logger.info("********** DONE");
+                        //logger.info("********** DONE");
                         InputStream is = httpMethod.getResponseBodyAsStream();
                         is.close();
                         success = true;
@@ -63,7 +63,7 @@ public class MyTest {
                     }
                 }
                 if (!success) {
-                    throw new Error("******* RETRY CLIENT COULD NOT RETRY *************");
+                    logger.error("****************** RETRY CLIENT COULD NOT RETRY **************");
                 }
             } 
         }

@@ -18,7 +18,7 @@ public class HostState {
     boolean down;
     HostConfiguration configuration;
     LinkedList<MonitoredConnection> freeConnections = new LinkedList<MonitoredConnection>();
-    int inFlightConnections;
+    int usedConnections;
 
     /** Remove a connection from the free list */
     void removeFreeConnection(MonitoredConnection c) {
@@ -30,7 +30,7 @@ public class HostState {
     }
     
     public String toString() {
-        return "[HS: " + getURI() + ",down=" + down + ",fc=" + freeConnections.size() + ",ac=" + inFlightConnections +"]";
+        return "[HS: " + getURI() + ",down=" + down + ",fc=" + freeConnections.size() + ",ac=" + usedConnections +"]";
     }
 
     /** Get the connections that were checked after "minDate" */
