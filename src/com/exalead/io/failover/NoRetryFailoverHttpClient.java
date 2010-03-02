@@ -24,6 +24,7 @@ public class NoRetryFailoverHttpClient {
         client = new HttpClient(manager);
         client.setParams(new HttpClientParams());
         client.getParams().setSoTimeout(5000);
+        client.getParams().setConnectionManagerTimeout(50);
         manager.getParams().setStaleCheckingEnabled(false);
     }
     
@@ -32,8 +33,9 @@ public class NoRetryFailoverHttpClient {
     }
     
     public int executeMethod(HttpMethod method) throws HttpException, IOException {
-        HostConfiguration config = manager.getHostToUse();
-
+        // Fake config
+        HostConfiguration config = new HostConfiguration();
+        
         /* DO NOT retry magically the method */
         method.getParams().setParameter(HttpMethodParams.RETRY_HANDLER,
                 new DefaultHttpMethodRetryHandler(0, false));

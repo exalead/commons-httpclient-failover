@@ -23,7 +23,7 @@ public class PoolMonitoringThread extends Thread {
         NDC.push("PoolMonitoring");
         while (!stop) {
             monitorLoop();
-            try {Thread.sleep(2500);} catch (InterruptedException e) {}
+            try {Thread.sleep(1000);} catch (InterruptedException e) {}
         }
         NDC.pop();
     }

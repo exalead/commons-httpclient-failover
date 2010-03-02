@@ -35,22 +35,20 @@ public class MyTest {
 
                 GetMethod httpMethod = new GetMethod("/exascript/Ping");
                 try {
-                    logger.info("START method");
+                    logger.info("********** START method");
                     int retcode = relay.executeMethod(httpMethod);
-                    logger.info("DONE");
+                    logger.info("********** DONE");
                     InputStream is = httpMethod.getResponseBodyAsStream();
                     is.close();
-                    logger.info("Ready to loop");
                 } catch (IOException e) {
-                    logger.warn(System.currentTimeMillis() + ": EXCEPTION", e);
+                    logger.warn("**************** " + System.currentTimeMillis() + ": MAIN EXCEPTION", e);
                 }
             }    
 
         }
     }
 
-
-    public void run() {
+    public void run() throws Exception {
         BasicConfigurator.configure();
         Logger.getLogger("org").setLevel(Level.INFO);
         Logger.getLogger("httpclient").setLevel(Level.INFO);
@@ -62,11 +60,19 @@ public class MyTest {
         PoolMonitoringThread pmt = new PoolMonitoringThread();
         pmt.pool = relay.manager;
         pmt.start();
-        MyThread t = new MyThread();
-        t.run();
+        
+        List<MyThread> threads = new ArrayList<MyThread>();
+        for (int i = 0; i < 12; i++) {
+            MyThread t = new MyThread();
+            t.start();
+            threads.add(t);
+        }
+        for (MyThread mt:  threads) {
+            mt.join();
+        }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         new MyTest().run();
     }
 }
