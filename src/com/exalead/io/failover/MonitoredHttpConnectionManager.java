@@ -2,7 +2,6 @@ package com.exalead.io.failover;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;

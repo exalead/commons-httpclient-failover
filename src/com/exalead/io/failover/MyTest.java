@@ -32,6 +32,8 @@ public class MyTest {
         public void run() {
             while (true) {
                 try {Thread.sleep(300);} catch (InterruptedException e) {}
+                
+                /*
 
                 GetMethod httpMethod = new GetMethod("/exascript/Ping");
                 try {
@@ -43,8 +45,30 @@ public class MyTest {
                 } catch (IOException e) {
                     logger.warn("**************** " + System.currentTimeMillis() + ": MAIN EXCEPTION", e);
                 }
-            }    
-
+                
+                
+                */
+                
+                boolean success = false;
+                for (int i = 0; i < 2; i++) {
+                    GetMethod httpMethod = new GetMethod("/exascript/Ping");
+                    try {
+                        logger.info("********** START method");
+                        int retcode = relay.executeMethod(httpMethod);
+                        logger.info("********** DONE");
+                        InputStream is = httpMethod.getResponseBodyAsStream();
+                        is.close();
+                        success = true;
+                        break;
+                    } catch (IOException e) {
+                        logger.warn("MAIN EXCEPTION - RETRY");
+                        continue;
+                    }
+                }
+                if (!success) {
+                    throw new Error("******* RETRY CLIENT COULD NOT RETRY *************");
+                }
+            } 
         }
     }
 
