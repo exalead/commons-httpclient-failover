@@ -170,6 +170,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     int applicativeTimeout = 5000;
     int failMaxTries = 2;
     long failTimeout = 200;
+    String isAlivePath = "isAlive";
 
     /* *************************** isAlive monitoring ************************* */
 
@@ -206,8 +207,8 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     boolean checkConnection(MonitoredConnection connection) throws IOException {
         /* TODO: HANDLE really state (for the case where isAlive is password-protected) */
         HttpState hs = new HttpState();
-        GetMethod gm = new GetMethod(connection.host.getURI() + "/isAlive");
-
+        GetMethod gm = new GetMethod(connection.host.getURI() + "/" + isAlivePath);
+        
         gm.getParams().setDefaults(new HttpClientParams());
 
         connection.conn.setSocketTimeout(isAliveTimeout);

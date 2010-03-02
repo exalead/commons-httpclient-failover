@@ -41,6 +41,14 @@ public class FailoverHttpClient {
         manager.failTimeout = timeout;
     }
     
+    /** 
+     * Set the path on which the "isAlive" service is mounted.
+     * isAlive must reply < 400 if host is alive, > 500 if host is down
+     */
+    public void setIsAlivePath(String isAlivePath) {
+        manager.isAlivePath = isAlivePath;
+    }
+    
 //    /** Maximum time to wait for a connection to become available
 //     * (if all hosts are not down and max number of connections
 //     * is exceeded)
