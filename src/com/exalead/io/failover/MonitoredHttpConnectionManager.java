@@ -78,6 +78,9 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         hs.configuration.setHost(host, port);
         hs.power = power;
         hosts.add(hs);
+        
+        for (int i = 0; i < power; i++) hostsForSelection.add(hs);
+        
         hostsMap.put(hs.configuration, hs);
         nextToMonitorList.add(hs);
     }
@@ -119,10 +122,9 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
     /* *************************** Hosts round-robin dispatch ************************* */
 
+    private List<HostState> hostsForSelection = new ArrayList<HostState>();
     /** Index of the current host in the list */
     private int currentHost;
-    /** Number of dispatches already performed on current host */
-    private int dispatchesOnCurrentHost;
 
     /** 
      * Get the host to use for next connection. 
@@ -131,35 +133,23 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      * TODO: Improve this method 
      */
     private HostState getNextRoundRobinHost() throws IOException {
-        if (dispatchesOnCurrentHost >= hosts.get(currentHost).power) {
-            /* Power reached, goto next */
-            dispatchesOnCurrentHost = 0;
-            currentHost++;
-        } else if (!hosts.get(currentHost).down) {
-            /* Power not reached */
-            dispatchesOnCurrentHost++;
-            return hosts.get(currentHost);
-        }
-
-        boolean reachedEnd = false;
+        boolean alreadyReachedEnd = false;
         while (true) {
-            if (currentHost >= hosts.size()) {
-                if (reachedEnd) {
+            currentHost++;
+            if (currentHost >= hostsForSelection.size()) {
+                if (alreadyReachedEnd) {
                     currentHost = 0;
                     /* Oops, all hosts are down ! */
                     throw new IOException("All hosts are down");
                 }
                 currentHost = 0;
-                reachedEnd = true;
+                alreadyReachedEnd = true;
             }
-            if (!hosts.get(currentHost).down) {
+            if (!hostsForSelection.get(currentHost).down) {
                 break;
-            } else {
-                currentHost++;
             }
         }
-        dispatchesOnCurrentHost = 1;
-        return hosts.get(currentHost);
+        return hostsForSelection.get(currentHost);
     }
 
     /**
@@ -326,7 +316,9 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         for (int i = 0; i < hosts.size(); i++) {
             HostState hs = null;
             try {
-                hs = getNextRoundRobinHost();
+                synchronized(this) {
+                    hs = getNextRoundRobinHost();
+                }
             } catch (IOException e) {
                 /* Crap, we already know that all hosts are down, break */
                 break;

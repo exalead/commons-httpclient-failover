@@ -39,7 +39,7 @@ public class PoolMonitoringThread extends Thread {
         synchronized(pool) {
             host = pool.nextToMonitor();
             NDC.push("monitor:" + host.getURI());
-            logger.info("Start monitoring loop");
+            logger.info("Start monitoring loop: "+ host);
             
             /* We'll monitor this host using the connection that hasn't been checked for 
              * the most time
