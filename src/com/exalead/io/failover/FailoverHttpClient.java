@@ -23,8 +23,22 @@ public class FailoverHttpClient {
         client = new HttpClient(manager);
         
         client.setParams(new HttpClientParams());
-       // client.getParams().setSoTimeout(5000);
         manager.getParams().setStaleCheckingEnabled(false);
+    }
+    
+    /** 
+     * Maximum number of tries to acquire a connection if all
+     * hosts are down
+     */
+    public void setConnectionAcquireFailMaxTries(int tries) {
+        manager.failMaxTries = tries;
+    }
+
+    /** 
+     * Maximum time to acquire a connection if all hosts are down
+     */
+    public void setConnectionAcquireFailTimeout(long timeout) {
+        manager.failTimeout = timeout;
     }
     
     public void setConnectionAcquireTimeout(long timeout) {
@@ -74,7 +88,7 @@ public class FailoverHttpClient {
         } catch (IOException e) {
             /* If we get an exception at that point, the underlying connection has
              * already been released, so we cannot set the failure type anymore */
-            logger.warn("NoRetryHttpClient: exception in executeMethod: " + e.getMessage());
+            logger.warn("FailoverHttpClient: exception in executeMethod: " + e.getMessage());
             throw e;
         }
     }

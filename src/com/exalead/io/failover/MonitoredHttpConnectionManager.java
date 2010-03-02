@@ -168,6 +168,8 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     int connectionTimeout = 500;
     int isAliveTimeout = 500;
     int applicativeTimeout = 5000;
+    int failMaxTries = 2;
+    long failTimeout = 200;
 
     /* *************************** isAlive monitoring ************************* */
 
@@ -269,7 +271,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      * until the timeout has expired.
      */
     private HttpConnection doGetConnection(long timeout) throws ConnectionPoolTimeoutException {
-        // TODO: connections restriction
+        // TODO: connections restriction + connections restriction timeout
         //int maxTotalConnections = this.params.getMaxTotalConnections();
         //int maxHostConnections = maxTotalConnections;
 
@@ -285,19 +287,24 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             HttpConnection connection = null;
             int loops = 0;
             while (true) {
-                if (loops++ > 0) {
+                loops++;
+                if (loops > failMaxTries) {
+                    throw new ConnectionPoolTimeoutException("Could not acquire any connection (all hosts down)");
+                }
+                if (loops > 1) {
                     logger.info("Restart trying to acquire on any host (loop " + loops + ")");
                 }
+                
                 try {
                     connection = acquireConnectionOnAnyHost();
                     break;
                 } catch (PoolAcquireException e) {
                     logger.warn("All cluster hosts are down !");
-                    if (useTimeout && (System.currentTimeMillis() - start > timeout)) {
+                    if (useTimeout && (System.currentTimeMillis() - start > failTimeout)) {
                         logger.warn("Timeout -> ConnectionPoolTimeoutException");
-                        throw new ConnectionPoolTimeoutException("Could not acquire any connection (hosts down)");
+                        throw new ConnectionPoolTimeoutException("Could not acquire any connection (all hosts down)");
                     }
-                    try { Thread.sleep(100); } catch (InterruptedException e2) {}
+                    try { Thread.sleep(50); } catch (InterruptedException e2) {}
                 }
             }
             return connection;
