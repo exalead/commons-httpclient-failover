@@ -41,9 +41,13 @@ public class FailoverHttpClient {
         manager.failTimeout = timeout;
     }
     
-    public void setConnectionAcquireTimeout(long timeout) {
-        client.getParams().setConnectionManagerTimeout(timeout);
-    }
+//    /** Maximum time to wait for a connection to become available
+//     * (if all hosts are not down and max number of connections
+//     * is exceeded)
+//     */
+//    public void setConnectionAcquireTimeout(long timeout) {
+//        client.getParams().setConnectionManagerTimeout(timeout);
+//    }
     
     public void startMonitoring(int nthreads) {
         int delay = 1000 / manager.hosts.size() * nthreads;

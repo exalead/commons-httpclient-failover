@@ -67,7 +67,7 @@ public class MyTest {
        // Logger.getLogger("org").setLevel(Level.TRACE);
 
         relay = new FailoverHttpClient();
-        relay.setConnectionAcquireTimeout(300);
+        relay.setConnectionAcquireFailTimeout(300);
         relay.addHost("localhost", 31606, 1);
         relay.addHost("localhost", 31616, 1);
         relay.startMonitoring(1);
