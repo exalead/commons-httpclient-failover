@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -77,12 +78,53 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         hs.configuration = new HostConfiguration();
         hs.configuration.setHost(host, port);
         hs.power = power;
+        
+        if (hostsMap.containsKey(hs.configuration)) {
+            throw new IllegalArgumentException("Host: " + host + ":" + port + " already exists");
+        }
+         
         hosts.add(hs);
         
         for (int i = 0; i < power; i++) hostsForSelection.add(hs);
         
         hostsMap.put(hs.configuration, hs);
         nextToMonitorList.add(hs);
+    }
+    
+    public synchronized void removeHost(String host, int port) {
+        HostConfiguration hc = new HostConfiguration();
+        hc.setHost(host, port);
+        
+        if (hosts.size() == 1) {
+            throw new IllegalArgumentException("Can't remove last host of pool");
+        }
+        
+        hostsMap.remove(hc);
+
+        /* Clean-up the round robin structure */
+        Iterator<HostState> iter = hostsForSelection.listIterator();
+        while (iter.hasNext()) {
+            HostState hs = iter.next();
+            if (hs.configuration.equals(hc)) {
+                iter.remove();
+            }
+        }
+        currentHost = 0;
+        
+        /* Cleanup the monitoring structure and the main list */
+        
+        nextToMonitorList.clear();
+        alreadyMonitored.clear();
+        
+        iter = hosts.listIterator();
+        while (iter.hasNext()) {
+            HostState hs = iter.next();
+            if (hs.configuration.equals(hc)) {
+                iter.remove();
+            } else {
+               nextToMonitorList.add(hs);
+            }
+        }
     }
 
     /** The list of all hosts in the pool */
