@@ -67,10 +67,31 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         }
     }
 
-    /* ***************** Global stuff ****************** */
+    /* ***************** Configuration ******************* */
+
+    /** We synchronously check the connection if its check is more than this delay old */
+    public long maxCheckDelayWithoutSynchronousCheck = 1000;
+    /** Max time for connect() to succeed */
+    public int connectionTimeout = 500;
+    /** Max time for "isAlive" to answer before host is considered timeouted */
+    int isAliveTimeout = 500;
+    int applicativeTimeout = 5000;
+    /** Number of times we retry to acquire if all hosts are down at acquisition time */
+    int failMaxTries = 2;
+    /** Max time we wait if all hosts are down at acquisition time */
+    long failTimeout = 200;
+    /** Maximum number of pooled (idle) connections for each host */
+    int maxIdleConnectionsPerHost;
+    /** Should we perform auto scaling-down of idle connections */
+    boolean autoScaleIdleConnections;
+    /** Path on the server on which the "isAlive" service is mounted */
+    String isAlivePath = "isAlive";
 
     /** Collection of parameters associated with this connection manager. */
     private HttpConnectionManagerParams params = new HttpConnectionManagerParams(); 
+
+    /* ***************** Global stuff ****************** */
+
     volatile boolean shutdown = false;
 
     public synchronized void addHost(String host, int port, int power) {
@@ -204,18 +225,6 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             return hs.configuration;
         }
     }
-
-    /** We synchronously check the connection if its check is more than this delay old */
-    long maxCheckDelayWithoutSynchronousCheck = 1000;
-    int connectionTimeout = 500;
-    int isAliveTimeout = 500;
-    int applicativeTimeout = 5000;
-    int failMaxTries = 2;
-    long failTimeout = 200;
-    int maxIdleConnectionsPerHost;
-    /** Should we perform auto scaling-down of idle connections */
-    boolean autoScaleIdleConnections;
-    String isAlivePath = "isAlive";
 
     /* *************************** isAlive monitoring ************************* */
 

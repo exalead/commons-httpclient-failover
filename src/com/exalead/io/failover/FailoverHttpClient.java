@@ -64,6 +64,10 @@ public class FailoverHttpClient {
     public void setIsAliveTimeout(int timeout) {
         manager.isAliveTimeout = timeout;
     }
+    
+    public MonitoredHttpConnectionManager getConnectionManager() {
+        return manager;
+    }
 
 //    /** Maximum time to wait for a connection to become available
 //     * (if all hosts are not down and max number of connections
