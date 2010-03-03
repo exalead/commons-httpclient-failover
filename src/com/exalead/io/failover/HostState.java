@@ -16,6 +16,18 @@ import com.exalead.io.failover.MonitoredConnection;
 public class HostState {
     int power;
     boolean down;
+
+    /* Array that keeps, for the "usedConnectionsTS" past iterations
+     * of the monitoring loop, the number of used connections at that 
+     * time.
+     * At each monitoring loop, we take the maximum of this floating 
+     * average array, and if we have more idle connections than that, we
+     * close them.   
+     */
+    final int usedConnectionsTS=8;
+    int[] usedConnectionsInPast = new int[usedConnectionsTS];
+    int usedConnectionsInPastIdx;
+    
     HostConfiguration configuration;
     LinkedList<MonitoredConnection> freeConnections = new LinkedList<MonitoredConnection>();
     int usedConnections;

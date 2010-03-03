@@ -17,8 +17,8 @@ import org.apache.log4j.NDC;
 public class PoolMonitoringThread extends Thread {
     MonitoredHttpConnectionManager pool;
     volatile boolean stop;
-    int loopDelay = 1000;
-    
+    int loopDelay = 500;
+
     public void run() {
         Thread.currentThread().setName("PoolMonitoring-" + Thread.currentThread().getId());
         while (!stop) {
@@ -34,12 +34,14 @@ public class PoolMonitoringThread extends Thread {
     public void monitorLoop() {
         HostState host = null;
         MonitoredConnection c = null;
-        
+
         synchronized(pool) {
             host = pool.nextToMonitor();
             NDC.push("monitor:" + host.getURI());
-            logger.info("Start monitoring loop: "+ host);
-            
+            if (logger.isDebugEnabled()) {
+                logger.debug("Start monitoring loop: "+ host);
+            }
+
             /* We'll monitor this host using the connection that hasn't been checked for 
              * the most time
              */
@@ -65,7 +67,7 @@ public class PoolMonitoringThread extends Thread {
                 return;
             }
         }
-        
+
         if (c == null) throw new Error("Error, null connection");
 
         try {
@@ -96,7 +98,7 @@ public class PoolMonitoringThread extends Thread {
             synchronized(pool) {
                 if (e instanceof SocketTimeoutException) {
                     logger.info("Host isAlive check timeout: " + host);
-                    
+
                     /* Timeout while trying to get isAlive -> host is hanged.
                      * Checking all connections could be too costly -> kill all connections.
                      * We'll retry later
@@ -119,6 +121,34 @@ public class PoolMonitoringThread extends Thread {
                 }
             }
         }
+        /* Perform auto scale-down */
+        synchronized(pool) {
+            if (pool.autoScaleIdleConnections) {
+                if (++host.usedConnectionsInPastIdx == host.usedConnectionsTS) {
+                    host.usedConnectionsInPastIdx = 0;
+                }
+
+                /* Don't do the pruning each time, only once per loop */
+                if (host.usedConnectionsInPastIdx == 0) {
+                    int max = 0;
+                    for (int i = 0; i < host.usedConnectionsTS; i++) {
+                        if (host.usedConnectionsInPast[i] > max) max = host.usedConnectionsInPast[i];
+                    }
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Max = " + max +" cur =" + host.usedConnections + " free=" + host.freeConnections.size());
+                    }
+                    if (host.freeConnections.size() > max + 1) {
+                        logger.info("Closing "  + (host.freeConnections.size() - max - 1) + " connections");
+                        for (int i = 0; i < host.freeConnections.size() - max - 1; i++) {
+                            MonitoredConnection mc = host.freeConnections.remove(host.freeConnections.size() - 1);
+                            mc.conn.close();
+                        }
+                    }
+                }
+                host.usedConnectionsInPast[host.usedConnectionsInPastIdx] = host.usedConnections;
+            }
+        }
+
         NDC.pop();
         /* End check, end monitoringLoop */
     }

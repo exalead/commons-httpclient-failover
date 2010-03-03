@@ -212,6 +212,9 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     int applicativeTimeout = 5000;
     int failMaxTries = 2;
     long failTimeout = 200;
+    int maxIdleConnectionsPerHost;
+    /** Should we perform auto scaling-down of idle connections */
+    boolean autoScaleIdleConnections;
     String isAlivePath = "isAlive";
 
     /* *************************** isAlive monitoring ************************* */
@@ -531,6 +534,12 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
         synchronized(this) {
             host.usedConnections++;
+            /* Keep track of the real maximum of connections that were allocated before the next
+             * monitoring loop
+             */
+            if (host.usedConnections > host.usedConnectionsInPast[host.usedConnectionsInPastIdx]) {
+                host.usedConnectionsInPast[host.usedConnectionsInPastIdx] = host.usedConnections;
+            }
         }
         
         // We do stale checking ourselves, DO NOT do it !
@@ -580,10 +589,15 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                 // to use them. Basically, we tell everyone "don't trust this host, check first"
                 host.markConnectionsAsUnchecked();
             } else {
-                long now = System.currentTimeMillis();
-                mc.lastMonitoringTime = now;
-                mc.lastUseTime = now;
-                host.addFreeConnection(mc);
+                if (maxIdleConnectionsPerHost != 0 && mc.host.freeConnections.size() >= maxIdleConnectionsPerHost) {
+                    logger.info("Discarding returned connection (too many idle ones)");
+                    mc.conn.close();
+                } else {
+                    long now = System.currentTimeMillis();
+                    mc.lastMonitoringTime = now;
+                    mc.lastUseTime = now;
+                    host.addFreeConnection(mc);
+                }
             }
         }
         NDC.pop();
@@ -618,7 +632,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         alreadyMonitored.addLast(next);
         return next;
     }
-
+    
     /* **************************** Inspection and helpers *************************** */
 
     /**
