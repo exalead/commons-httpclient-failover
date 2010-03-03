@@ -11,7 +11,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 
-public class MyTest {
+public class MyTest0 {
     private static Logger logger = Logger.getLogger("log");
 
     FailoverHttpClient relay;
@@ -84,6 +84,6 @@ public class MyTest {
     }
 
     public static void main(String[] args) throws Exception {
-        new MyTest().run();
+        new MyTest0().run();
     }
 }
