@@ -10,8 +10,11 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-
-public class MyTest0 {
+/**
+ * A simple program demonstrating the use of the 
+ * failover client
+ */
+public class SimpleFailoverTest {
     private static Logger logger = Logger.getLogger("log");
 
     FailoverHttpClient relay;
@@ -39,7 +42,7 @@ public class MyTest0 {
                 
                 boolean success = false;
                 for (int i = 0; i < 2; i++) {
-                    GetMethod httpMethod = new GetMethod("/exascript/Ping");
+                    GetMethod httpMethod = new GetMethod("/ping");
                     try {
                         //logger.info("********** START method");
                         relay.executeMethod(httpMethod);
