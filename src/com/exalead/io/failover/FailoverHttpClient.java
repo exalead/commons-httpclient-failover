@@ -139,16 +139,5 @@ public class FailoverHttpClient {
         }
     }
 
-//    TBD: Would we really gain *anything* ?
-//    /** 
-//     * If you get an error after executeMethod, while reading the response stream, you can 
-//     * inform the FailoverClient about its type:
-//     *  - TIMEOUT if you got a SocketTimeoutException (could indicate that the host is hanged)
-//     *  - OTHER_ERROR else
-//     */
-//    public void setThreadLocalFailureType(FailureType type) {
-//        manager.onHostFailure(host, type)
-//    }
-    
     private static Logger logger = Logger.getLogger("httpclient.failover");
 }
