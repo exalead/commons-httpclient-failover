@@ -18,11 +18,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.httpclient.Credentials;
+import org.apache.commons.httpclient.UsernamePasswordCredentials;
 import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
 import org.apache.commons.httpclient.HostConfiguration;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpMethod;
+import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpMethodParams;
 import org.apache.log4j.Logger;
@@ -38,6 +41,16 @@ public class FailoverHttpClient {
         
         client.setParams(new HttpClientParams());
         manager.getParams().setStaleCheckingEnabled(false);
+    }
+ 
+    public void setCredentials(String login, String password) {
+    	client.getParams().setAuthenticationPreemptive(true);
+        Credentials defaultcreds = new UsernamePasswordCredentials(login, password);
+        client.getState().setCredentials(new AuthScope(client.getHostConfiguration().getHost(),
+        											   client.getHostConfiguration().getPort(),
+        											   AuthScope.ANY_REALM), defaultcreds);
+        System.out.println("set password for host: " +
+        client.getHostConfiguration().getHost() + ":" + client.getHostConfiguration().getPort());
     }
     
     /** 
@@ -101,25 +114,27 @@ public class FailoverHttpClient {
             threads.add(pmt);
         }
     }
-    
+
     public void shutdown() {
         for (PoolMonitoringThread pmt : threads) {
-            pmt.stop = true;
             try { pmt.join();} catch (InterruptedException e) {}
         }
         manager.shutdown();
     }
-    
+
     public void addHost(String host, int port, int power) {
         manager.addHost(host, port, power);
     }
-    
+
     public int executeMethod(HttpMethod method) throws HttpException, IOException {
-        return executeMethod(method, 0);
+        return executeMethod(method, 0, 1);
     }
-    
-    
+
     public int executeMethod(HttpMethod method, int timeout) throws HttpException, IOException {
+        return executeMethod(method, timeout, 1);
+    }
+
+    public int executeMethod(HttpMethod method, int timeout, int retries) throws HttpException, IOException {
         // Fake config, the underlying manager manages all
         HostConfiguration config = new HostConfiguration();
         
@@ -128,15 +143,18 @@ public class FailoverHttpClient {
         /* DO NOT retry magically the method */
         method.getParams().setParameter(HttpMethodParams.RETRY_HANDLER,
                 new DefaultHttpMethodRetryHandler(0, false));
-        
-        try {
-            return client.executeMethod(config, method);
-        } catch (IOException e) {
-            /* If we get an exception at that point, the underlying connection has
-             * already been released, so we cannot set the failure type anymore */
-            logger.warn("FailoverHttpClient: exception in executeMethod: " + e.getMessage());
-            throw e;
+        IOException fail = null;
+        for (int i = 0; i < retries; ++i) {
+        	try {
+        		return client.executeMethod(config, method);
+        	} catch (IOException e) {
+        		logger.warn("Failed to execute method - retry");
+        		fail = e;
+        		continue;
+        	}
         }
+        logger.warn("FailoverHttpClient: exception in executeMethod: " + fail.getMessage());
+        throw fail;
     }
 
     private static Logger logger = Logger.getLogger("httpclient.failover");

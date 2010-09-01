@@ -1,5 +1,5 @@
 <project default="jar" name="commons-httpclient-failover">
-   <property name="version" value="0.0.4" />
+   <property name="version" value="0.0.5" />
 
     <path id="classpath">
         <fileset dir="lib" includes="*.jar"/>
