@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.httpclient.Credentials;
 import org.apache.commons.httpclient.UsernamePasswordCredentials;
 import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
 import org.apache.commons.httpclient.HostConfiguration;
@@ -43,14 +42,8 @@ public class FailoverHttpClient {
         manager.getParams().setStaleCheckingEnabled(false);
     }
  
-    public void setCredentials(String login, String password) {
-    	client.getParams().setAuthenticationPreemptive(true);
-        Credentials defaultcreds = new UsernamePasswordCredentials(login, password);
-        client.getState().setCredentials(new AuthScope(client.getHostConfiguration().getHost(),
-        											   client.getHostConfiguration().getPort(),
-        											   AuthScope.ANY_REALM), defaultcreds);
-        System.out.println("set password for host: " +
-        client.getHostConfiguration().getHost() + ":" + client.getHostConfiguration().getPort());
+     public void setCredentials(String login, String password) {
+        manager.setCredentials(new UsernamePasswordCredentials(login, password));
     }
     
     /** 
@@ -143,9 +136,16 @@ public class FailoverHttpClient {
         /* DO NOT retry magically the method */
         method.getParams().setParameter(HttpMethodParams.RETRY_HANDLER,
                 new DefaultHttpMethodRetryHandler(0, false));
+
+        if (manager.getCredentials() != null) {
+            client.getParams().setAuthenticationPreemptive(true);
+            client.getState().setCredentials(new AuthScope(AuthScope.ANY), manager.getCredentials());
+        }
+
         IOException fail = null;
         for (int i = 0; i < retries; ++i) {
         	try {
+        	    
         		return client.executeMethod(config, method);
         	} catch (IOException e) {
         		logger.warn("Failed to execute method - retry");

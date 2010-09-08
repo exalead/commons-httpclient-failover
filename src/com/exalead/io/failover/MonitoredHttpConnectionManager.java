@@ -25,13 +25,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.httpclient.ConnectionPoolTimeoutException;
+import org.apache.commons.httpclient.Credentials;
 import org.apache.commons.httpclient.HostConfiguration;
+import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpConnection;
 import org.apache.commons.httpclient.HttpConnectionManager;
 import org.apache.commons.httpclient.HttpException;
-import org.apache.commons.httpclient.HttpState;
+import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.methods.GetMethod;
-import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpConnectionManagerParams;
 import org.apache.log4j.Logger;
 import org.apache.log4j.NDC;
@@ -99,7 +100,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     /** Should we perform auto scaling-down of idle connections */
     boolean autoScaleIdleConnections;
     /** Path on the server on which the "isAlive" service is mounted */
-    String isAlivePath = "isAlive";
+    String isAlivePath = null;
 
     /** Collection of parameters associated with this connection manager. */
     private HttpConnectionManagerParams params = new HttpConnectionManagerParams(); 
@@ -112,12 +113,13 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         HostState hs = new HostState();
         hs.configuration = new HostConfiguration();
         hs.configuration.setHost(host, port);
+        
         hs.power = power;
         
         if (hostsMap.containsKey(hs.configuration)) {
             throw new IllegalArgumentException("Host: " + host + ":" + port + " already exists");
         }
-         
+
         hosts.add(hs);
         
         for (int i = 0; i < power; i++) hostsForSelection.add(hs);
@@ -267,22 +269,43 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     }
     DummyManager dummyManager = new DummyManager();
 
+    Credentials creds = null;
+
+    void setCredentials(Credentials creds) {
+        this.creds = creds;
+    }
+
+    Credentials getCredentials() {
+        return creds;
+    }
+
     /** 
+     * Check if a connection is available.
+     * Returns "true" if isAlivePath is not set.
      * Returns "true" if host is up and alive.
-     * Returns "false" if host is up but not alive
-     * Throws an exception in case of connection error
+     * Returns "false" if host is up but not alive.
+     * Throws an exception in case of connection error.
      */
     boolean checkConnection(MonitoredConnection connection) throws IOException {
-        /* TODO: HANDLE really state (for the case where isAlive is password-protected) */
-        HttpState hs = new HttpState();
-        GetMethod gm = new GetMethod(connection.host.getURI() + "/" + isAlivePath);
-        
-        gm.getParams().setDefaults(new HttpClientParams());
+        if (isAlivePath == null) {
+            logger.warn("Null isAlive path, not checked");
+            return true;
+        }
+        HttpClient httpClient = new HttpClient();
+        if (creds != null) {
+            httpClient.getParams().setAuthenticationPreemptive(true);
+            httpClient.getState().setCredentials(
+                    new AuthScope(connection.conn.getHost(),
+                            connection.conn.getPort(),
+                            AuthScope.ANY_REALM),
+                            creds);
+        }
+        httpClient.getParams().setSoTimeout(isAliveTimeout);
+        int statusCode = httpClient.executeMethod(new GetMethod(connection.host.getURI() + "/" + isAlivePath));            
 
-        connection.conn.setSocketTimeout(isAliveTimeout);
-        int statusCode = gm.execute(hs, connection.conn);
         connection.conn.setHttpConnectionManager(dummyManager);
         consumeLastResponse(connection.conn);
+
         return statusCode < 400;
     }
 
@@ -569,7 +592,6 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         c.conn.getParams().setDefaults(this.getParams());
         c.conn.getParams().setStaleCheckingEnabled(false);
         c.conn.setHttpConnectionManager(this);
-        
         /* We loose the association with the monitored connection, we'll recreate one at release time */
         return c.conn;
     }
