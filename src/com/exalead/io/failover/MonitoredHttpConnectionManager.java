@@ -279,6 +279,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         return creds;
     }
 
+    static boolean firstCheck = true;
     /** 
      * Check if a connection is available.
      * Returns "true" if isAlivePath is not set.
@@ -288,7 +289,10 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      */
     boolean checkConnection(MonitoredConnection connection) throws IOException {
         if (isAlivePath == null) {
-            logger.warn("Null isAlive path, not checked");
+            if (firstCheck == true) { // Notify only on the first check
+                logger.warn("Null isAlive path, not checked");
+                firstCheck = false;
+            }
             return true;
         }
         HttpClient httpClient = new HttpClient();
