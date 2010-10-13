@@ -128,9 +128,13 @@ public class FailoverHttpClient {
     }
 
     public int executeMethod(HttpMethod method, int timeout, int retries) throws HttpException, IOException {
+    	if (manager.hosts.size() == 0) {
+    		logger.error("Could not execute method without any host.");
+    		throw new HttpException("Trying to execute methods without host");
+    	}
         // Fake config, the underlying manager manages all
         HostConfiguration config = new HostConfiguration();
-        
+
         /* Set method parameters */
         method.getParams().setSoTimeout(timeout);
         /* DO NOT retry magically the method */
@@ -152,7 +156,7 @@ public class FailoverHttpClient {
         		continue;
         	}
         }
-        logger.warn("exception in executeMethod: " + fail.getMessage(), fail);
+        logger.warn("exception in executeMethod: " + fail.getMessage());
         throw fail;
     }
 
