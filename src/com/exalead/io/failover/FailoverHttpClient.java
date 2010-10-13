@@ -143,17 +143,16 @@ public class FailoverHttpClient {
         }
 
         IOException fail = null;
-        for (int i = 0; i < retries; ++i) {
+        for (int i = 1; i <= retries; ++i) {
         	try {
-        	    
         		return client.executeMethod(config, method);
         	} catch (IOException e) {
-        		logger.warn("Failed to execute method - retry");
+        		logger.warn("Failed to execute method - try " + i + "/" + retries);
         		fail = e;
         		continue;
         	}
         }
-        logger.warn("FailoverHttpClient: exception in executeMethod: " + fail.getMessage());
+        logger.warn("exception in executeMethod: " + fail.getMessage(), fail);
         throw fail;
     }
 
