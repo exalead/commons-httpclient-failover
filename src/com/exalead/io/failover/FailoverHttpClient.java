@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.httpclient.URI;
 import org.apache.commons.httpclient.UsernamePasswordCredentials;
 import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
 import org.apache.commons.httpclient.HostConfiguration;
@@ -115,6 +116,10 @@ public class FailoverHttpClient {
         manager.shutdown();
     }
 
+    public void addHost(URI uri, int power) {
+    	manager.addHost(uri, power);
+    }
+    
     public void addHost(String host, int port, int power) {
         manager.addHost(host, port, power);
     }

@@ -31,6 +31,7 @@ import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpConnection;
 import org.apache.commons.httpclient.HttpConnectionManager;
 import org.apache.commons.httpclient.HttpException;
+import org.apache.commons.httpclient.URI;
 import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.params.HttpConnectionManagerParams;
@@ -109,6 +110,25 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
 
     volatile boolean shutdown = false;
 
+    public synchronized void addHost(URI uri, int power) {
+        HostState hs = new HostState();
+        hs.configuration = new HostConfiguration();
+        hs.configuration.setHost(uri);
+        
+        hs.power = power;
+        
+        if (hostsMap.containsKey(hs.configuration)) {
+            throw new IllegalArgumentException("Host: " + uri.toString() + " already exists");
+        }
+
+        hosts.add(hs);
+        
+        for (int i = 0; i < power; i++) hostsForSelection.add(hs);
+        
+        hostsMap.put(hs.configuration, hs);
+        nextToMonitorList.add(hs);    	
+    }
+    
     public synchronized void addHost(String host, int port, int power) {
         HostState hs = new HostState();
         hs.configuration = new HostConfiguration();
@@ -289,7 +309,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      */
     boolean checkConnection(MonitoredConnection connection) throws IOException {
         if (isAlivePath == null) {
-            if (firstCheck == true) { // Notify only on the first check
+            if (firstCheck == true) { // Notify only on the first check ; XXX do it for each host !
                 logger.warn("Null isAlive path, not checked");
                 firstCheck = false;
             }
