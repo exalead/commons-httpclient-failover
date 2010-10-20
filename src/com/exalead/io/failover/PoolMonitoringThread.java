@@ -53,7 +53,7 @@ public class PoolMonitoringThread extends Thread {
             host = pool.nextToMonitor();
             NDC.push("monitor:" + host.getURI());
             if (logger.isDebugEnabled()) {
-                logger.debug("Start monitoring loop: "+ host);
+                logger.trace("Start monitoring loop: "+ host);
             }
 
             /* We'll monitor this host using the connection that hasn't been checked for 
@@ -99,7 +99,7 @@ public class PoolMonitoringThread extends Thread {
                 if (host.down) {
                     logger.info("Host is alive: " + host);
                 } else {
-                    if (logger.isDebugEnabled()) logger.debug("Host is alive: " + host);
+                    if (logger.isDebugEnabled()) logger.trace("Host is alive: " + host);
                 }
                 /* Everything OK */
                 synchronized(pool) {
