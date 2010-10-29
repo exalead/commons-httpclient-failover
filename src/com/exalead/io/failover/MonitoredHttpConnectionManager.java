@@ -525,7 +525,10 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                      */
                     synchronized(this) {
                         logger.info("Connection failed: " + e.getMessage() +" --> host is down");
-                        host.down = true;
+                        if (isAlivePath != null) {
+                            /* Only set hosts as down if there is a isAlive to wake them up later */
+                            host.down = true;
+                        }
                         // If the host has connections, it means that they were 
                         // established while we were trying to connect. .. So maybe the host
                         // is not down, but to be sure, let's still consider as down and 
@@ -549,7 +552,10 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                     if (ret == false) {
                         synchronized(this) {
                             logger.info("Host is not alive:"  + host);
-                            host.down = true;
+                            if (isAlivePath != null) {
+                                /* Only set hosts as down if there is a isAlive to wake them up later */
+                                host.down = true;
+                            }
                             host.killAllConnections();
                             throw new PoolAcquireException("Host is down (not alive)");
                         }
