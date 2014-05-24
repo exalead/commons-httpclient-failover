@@ -28,7 +28,8 @@ import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.params.HttpClientParams;
 import org.apache.commons.httpclient.params.HttpMethodParams;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class FailoverHttpClient {
     protected MonitoredHttpConnectionManager manager;
@@ -165,5 +166,6 @@ public class FailoverHttpClient {
         throw fail;
     }
 
-    private static Logger logger = Logger.getLogger("httpclient.failover");
+    final Logger logger = LoggerFactory.getLogger("httpclient.failover");
+
 }
