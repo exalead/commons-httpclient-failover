@@ -17,8 +17,9 @@ package com.exalead.io.failover;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 
-import org.apache.log4j.Logger;
-import org.apache.log4j.NDC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * @file
@@ -51,7 +52,7 @@ public class PoolMonitoringThread extends Thread {
 
         synchronized(pool) {
             host = pool.nextToMonitor();
-            NDC.push("monitor:" + host.getURI());
+            MDC.put("monitor", "monitor:" + host.getURI());
             if (logger.isDebugEnabled()) {
                 logger.trace("Start monitoring loop: "+ host);
             }
@@ -77,7 +78,7 @@ public class PoolMonitoringThread extends Thread {
                     host.down = true;
                     host.killAllConnections();
                 }
-                NDC.pop();
+                MDC.remove("monitor");
                 return;
             }
         }
@@ -163,9 +164,10 @@ public class PoolMonitoringThread extends Thread {
             }
         }
 
-        NDC.pop();
+        MDC.remove("monitor");
         /* End check, end monitoringLoop */
     }
 
-    private static Logger logger = Logger.getLogger("httpclient.failover");
+    final Logger logger = LoggerFactory.getLogger("httpclient.failover");
+
 }

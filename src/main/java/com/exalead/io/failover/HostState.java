@@ -22,7 +22,8 @@ import java.util.ListIterator;
 
 import org.apache.commons.httpclient.HostConfiguration;
 import org.apache.commons.httpclient.HttpConnection;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.exalead.io.failover.MonitoredConnection;
 
@@ -136,6 +137,6 @@ public class HostState {
     void addFreeConnection(MonitoredConnection mc) {
         freeConnections.add(mc);
     }
+    Logger logger = LoggerFactory.getLogger("httpclient.failover");
 
-    private static Logger logger = Logger.getLogger("httpclient.failover");
 }

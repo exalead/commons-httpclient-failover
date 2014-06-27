@@ -35,8 +35,10 @@ import org.apache.commons.httpclient.URI;
 import org.apache.commons.httpclient.auth.AuthScope;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.params.HttpConnectionManagerParams;
-import org.apache.log4j.Logger;
-import org.apache.log4j.NDC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
 
 /**
  * @file
@@ -52,7 +54,7 @@ import org.apache.log4j.NDC;
 public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     /* **************** Static helpers ******************** */
 
-    private static final Logger logger = Logger.getLogger("httpclient.failover");
+    final Logger logger = LoggerFactory.getLogger("httpclient.failover");
 
     /**
      * Gets the host configuration for a connection.
@@ -398,7 +400,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             throw new IllegalStateException("Connection factory has been shutdown.");
         }
 
-        NDC.push("acquire");
+        MDC.put("acquire", "acquire");
         try {
             HttpConnection connection = null;
             int loops = 0;
@@ -425,7 +427,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
             }
             return connection;
         } finally {
-            NDC.pop();
+            MDC.remove("acquire");
         }
     }
 
@@ -633,7 +635,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
      * @param conn the HttpConnection to make available.
      */
     public void releaseConnection(HttpConnection conn) {
-        NDC.push("release");
+        MDC.put("release", "release");
         logger.trace("enter HttpConnectionManager.releaseConnection(HttpConnection)");
 
         if (conn instanceof HttpConnectionAdapter) {
@@ -675,7 +677,7 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
                 }
             }
         }
-        NDC.pop();
+        MDC.remove("require");
     }
 
     /* *************************** Hosts monitoring scheduler ************************* */
@@ -733,13 +735,12 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
     }
 
     /** Get the parameters of this connection manager */
-    @Override
+    
     public HttpConnectionManagerParams getParams() {
         return this.params;
     }
 
     /** Assigns the parameters */
-    @Override
     public void setParams(final HttpConnectionManagerParams params) {
         if (params == null) {
             throw new IllegalArgumentException("Parameters may not be null");
@@ -747,7 +748,6 @@ public class MonitoredHttpConnectionManager implements HttpConnectionManager {
         this.params = params;
     }
     
-    @Override
     public void closeIdleConnections(long idleTimeout) {
         // TODO ?
     }
